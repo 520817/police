@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Literal
 from fastapi.staticfiles import StaticFiles
 
-from simple_police_bio import predict
+from py.simple_police_bio import predict
 
 # --------------------------------------------------------------    
 # ✅ 테스트 중이라 prt/day를 고정시킴
@@ -90,4 +90,5 @@ def chat(input: ChatInput):
 
 @app.get("/ping")
 def ping():
+
     return {"ok": True}
