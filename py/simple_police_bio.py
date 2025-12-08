@@ -23,8 +23,8 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
 from pydantic import BaseModel, Field
-from utils import *
-from data import *
+from .utils import *
+from .data import *
 
 # 공통 LLM 
 LLM_MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
@@ -698,3 +698,4 @@ def predict(
         "consent_state": out.get("biosignal_consent", "unknown"),
         "plot_path": out.get("biosignal_last", {}).get("plot_path") if was_first else None,
     }
+
