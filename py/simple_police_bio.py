@@ -538,12 +538,6 @@ def get_graph():
     """그래프를 1회만 빌드하고 재사용"""
     return build_graph(llm)
 
-
-# 상단 import에 추가
-from data import get_biosignal_records
-
-from typing import Optional, Literal
-
 def predict(
     user_text: str,
     dept: str = "",
@@ -698,4 +692,5 @@ def predict(
         "consent_state": out.get("biosignal_consent", "unknown"),
         "plot_path": out.get("biosignal_last", {}).get("plot_path") if was_first else None,
     }
+
 
