@@ -20,8 +20,7 @@ def _time_to_hhmm_list(seq: Iterable[Any]) -> List[Optional[str]]:
 
 def remove_ppg_prefix(obj):
     """
-    dict 또는 list[dict]에서 키가 'PPG_'로 시작하면 접두어를 제거합니다.
-    기타 타입은 그대로 반환합니다.
+    dict 또는 list[dict]에서 키가 'PPG_'로 시작하면 접두어 제거
     """
     if isinstance(obj, list):
         return [remove_ppg_prefix(x) for x in obj]
