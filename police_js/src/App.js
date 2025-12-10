@@ -501,8 +501,8 @@ export default function App() {
         <div className="chat-header">
           <h1>경찰관 전용 AI 챗봇</h1>
           <div className="logo-group">
-            <img src="/images/police.png" alt="경찰청 로고" className="chat-logo" />
-            <img src="/images/kist.png" alt="키스트 로고" className="chat-logo" />
+            <img src="./images/police.PNG" alt="경찰청 로고" className="chat-logo" />
+            <img src="./images/kist.PNG" alt="키스트 로고" className="chat-logo" />
           </div>
         </div>
 
