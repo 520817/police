@@ -38,6 +38,15 @@ html, body, #root {
   height: auto;
 }
 
+.modal-full {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;   /* padding/border 포함해서 100% */
+  display: block;
+}
+
 /* -------------------------------
    Chat Box
 -------------------------------- */
