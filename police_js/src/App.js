@@ -2,7 +2,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
-const apiOrigin = "http://localhost:8000"; // 백엔드 origin
+const apiOrigin =
+  process.env.NODE_ENV === "production"
+    ? "https://police-pwfu.onrender.com"   // FastAPI 배포된 주소
+    : "http://localhost:8000";             // 로컬 개발용
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -341,12 +344,13 @@ export default function App() {
           >
             <h2>전화번호 확인</h2>
             <p style={{ fontSize: 14, color: "#555" }}>
-              11자리 번호를 입력해 주세요.
+              전화번호를 입력해 주세요.
             </p>
             <input
               type="tel"
               value={phoneInput}
               onChange={(e) => setPhoneInput(e.target.value)}
+              placeholder="01012345678"  
               style={{
                 width: "100%",
                 padding: 8,
@@ -361,10 +365,12 @@ export default function App() {
               onClick={handlePhoneSubmit}
               style={{
                 marginTop: 12,
-                width: "100%",
-                padding: 8,
+                width: "100%",   
+                padding: 10,
                 borderRadius: 6,
+                border: "1px solid #000",
                 cursor: "pointer",
+                background: "white"
               }}
             >
               확인
