@@ -23,11 +23,16 @@ app = FastAPI()
 # 플롯 이미지 서빙
 app.mount("/plots", StaticFiles(directory="plots"), name="plots")
 
+origins = [
+    "http://localhost:3000",                 # 로컬
+    "https://police-front.onrender.com/",   # Render static site URL
+]
+
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -92,4 +97,5 @@ def chat(input: ChatInput):
 def ping():
 
     return {"ok": True}
+
 
