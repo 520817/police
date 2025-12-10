@@ -352,7 +352,7 @@ export default function App() {
               onChange={(e) => setPhoneInput(e.target.value)}
               placeholder="01012345678"  
               style={{
-                width: "100%",
+                width: "240px",
                 padding: 8,
                 borderRadius: 6,
                 border: "1px solid #ccc",
@@ -365,7 +365,7 @@ export default function App() {
               onClick={handlePhoneSubmit}
               style={{
                 marginTop: 12,
-                width: "100%",   
+                width: "240px",   
                 padding: 10,
                 borderRadius: 6,
                 border: "1px solid #000",
