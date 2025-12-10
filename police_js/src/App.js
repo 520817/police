@@ -366,7 +366,7 @@ export default function App() {
               style={{
                 marginTop: 12,
                 width: "100%",   
-                padding: 8,
+                padding: 10,
                 borderRadius: 6,
                 border: "1px solid #000",
                 cursor: "pointer",
