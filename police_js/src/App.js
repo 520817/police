@@ -542,7 +542,6 @@ export default function App() {
             onChange={(e) => setShiftType(e.target.value)}
             className="message-input shift-input"
             disabled={started}
-            style={{ minWidth: 140 }}
             aria-label="근무타입"
             title="근무타입"
           >
