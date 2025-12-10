@@ -103,9 +103,9 @@ h1 {
   outline: none;
 }
 
-/* 부서 */
+/* 계급 */
 .rank-input {
-  flex: 1;
+  flex: 1.2;
   min-width: 0;
   padding: 12px 10px;
   font-size: 16px;
