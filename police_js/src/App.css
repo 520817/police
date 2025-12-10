@@ -1,6 +1,6 @@
 .app {
   min-height: 100vh;
-  display: grid;
+  display: flex;
   place-items: center;
   background: #f6f7fb;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
