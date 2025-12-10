@@ -11,7 +11,7 @@
 -------------------------------- */
 .chat-header {
   display: flex;
-  justify-content: space-between; /* 좌: 글자 / 우: 로고 */
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
 }
@@ -83,57 +83,63 @@ h1 {
 }
 
 /* -------------------------------
-   반응형 입력 폼 (핵심)
+   프로필 입력행
+-------------------------------- */
+.profile-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+/* 공통 */
+.profile-input {
+  padding: 12px 10px;
+  font-size: 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+  min-width: 0;
+}
+
+/* 부서: 가장 넓게 */
+.dept-input {
+  flex: 2.4;
+}
+
+/* 계급: 중간 */
+.rank-input {
+  flex: 1.6;
+}
+
+/* 근무 형태: 가장 작게 */
+.shift-input {
+  flex: 1.1;
+}
+
+/* -------------------------------
+   메시지 입력 폼
 -------------------------------- */
 .message-form {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
   width: 100%;
+  margin-top: 10px;
 }
 
-/* 메시지 입력창 — 가장 넓게 차지 */
 .message-input {
-  flex: 3;      
-  min-width: 0; /* 줄어들 수 있게 허용 */
+  flex: 3;
   padding: 12px 10px;
   font-size: 16px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   outline: none;
-}
-
-/* 부서 */
-.message-form .message-input:not(.rank-input):not(.shift-input) {
-  /* dept input: className="message-input" 만 있음 */
-  flex: 2.4;
-}
-
-/* 계급 */
-.rank-input {
-  flex: 1.5;
   min-width: 0;
-  padding: 12px 10px;
-  font-size: 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  outline: none;
-}
-
-/* 근무형태 */
-.shift-input {
-  flex: 1.1;
-  min-width: 0;
-  padding: 12px 10px;
-  font-size: 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  outline: none;
 }
 
 /* 전송 버튼 */
 .send-button {
-  flex: 0 0 auto;        /* 자동 폭(내용 만큼) */
+  flex: 0 0 auto;
   padding: 10px 14px;
   font-size: 14px;
   border: none;
@@ -141,8 +147,9 @@ h1 {
   color: #fff;
   border-radius: 8px;
   cursor: pointer;
-  white-space: nowrap;   /* 줄바꿈 방지 */
+  white-space: nowrap;
 }
+
 .send-button:hover { opacity: 0.9; }
 
 /* 대화 종료 버튼 */
@@ -170,7 +177,6 @@ h1 {
   border-radius: 8px;
   padding: 10px 16px;
   cursor: pointer;
-  font-weight: 400;
   font-size: 15px;
 }
 
@@ -178,7 +184,6 @@ h1 {
   background: #9aa0a6;
   color: white;
 }
-
 .inline-consent .btn-accept {
   background: #2563eb;
   color: white;
@@ -188,13 +193,10 @@ h1 {
 .inline-consent .btn-accept:hover { opacity: 0.92; }
 
 /* -------------------------------
-   아주 작은 화면 대응 (옵션)
+   작은 화면 대응
 -------------------------------- */
 @media (max-width: 380px) {
-  .message-form .rank-input {
-    flex: 1.4;
-  }
-  .message-form .shift-input {
-    flex: 1; /* 더 조금 줄이기 */
-  }
+  .dept-input { flex: 2.2; }
+  .rank-input { flex: 1.4; }
+  .shift-input { flex: 1; }
 }
