@@ -351,27 +351,15 @@ export default function App() {
               value={phoneInput}
               onChange={(e) => setPhoneInput(e.target.value)}
               placeholder="01012345678"  
-              style={{
-                width: "100%",
-                padding: 8,
-                borderRadius: 6,
-                border: "1px solid #ccc",
-              }}
+              className="modal-full"
             />
             {phoneError && (
               <div style={{ color: "red", fontSize: 12 }}>{phoneError}</div>
             )}
             <button
               onClick={handlePhoneSubmit}
-              style={{
-                marginTop: 12,
-                width: "100%",   
-                padding: 10,
-                borderRadius: 6,
-                border: "1px solid #000",
-                cursor: "pointer",
-                background: "white"
-              }}
+              className="modal-full"
+              style={{ marginTop: 12, cursor: "pointer", background: "white" }}
             >
               확인
             </button>
