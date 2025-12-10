@@ -1,7 +1,8 @@
 .app {
   min-height: 100vh;
   display: flex;
-  place-items: center;
+  justify-content: center;    /* 가로 가운데 */
+  align-items: center;        /* 세로 가운데 */
   background: #f6f7fb;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
