@@ -35,8 +35,7 @@
    Chat Box
 -------------------------------- */
 .chat-box {
-  width: 100%;
-  max-width: 640px;
+  width: min(100vw - 24px, 640px);
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
