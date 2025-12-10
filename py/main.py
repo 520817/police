@@ -25,7 +25,7 @@ app.mount("/plots", StaticFiles(directory="plots"), name="plots")
 
 origins = [
     "http://localhost:3000",                 # 로컬
-    "https://police-front.onrender.com/",   # Render static site URL
+    "https://police-front.onrender.com",   # Render static site URL
 ]
 
 # CORS 설정
@@ -97,5 +97,6 @@ def chat(input: ChatInput):
 def ping():
 
     return {"ok": True}
+
 
 
