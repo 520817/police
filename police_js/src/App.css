@@ -103,9 +103,15 @@ h1 {
   outline: none;
 }
 
+/* 부서 */
+.message-form .message-input:not(.rank-input):not(.shift-input) {
+  /* dept input: className="message-input" 만 있음 */
+  flex: 2.4;
+}
+
 /* 계급 */
 .rank-input {
-  flex: 1.2;
+  flex: 1.5;
   min-width: 0;
   padding: 12px 10px;
   font-size: 16px;
@@ -116,7 +122,7 @@ h1 {
 
 /* 근무형태 */
 .shift-input {
-  flex: 1;
+  flex: 1.1;
   min-width: 0;
   padding: 12px 10px;
   font-size: 16px;
@@ -185,8 +191,10 @@ h1 {
    아주 작은 화면 대응 (옵션)
 -------------------------------- */
 @media (max-width: 380px) {
-  .rank-input,
-  .shift-input {
-    flex: 0.7; 
+  .message-form .rank-input {
+    flex: 1.4;
+  }
+  .message-form .shift-input {
+    flex: 1; /* 더 조금 줄이기 */
   }
 }
