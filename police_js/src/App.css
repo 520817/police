@@ -100,7 +100,10 @@ h1 {
   border-radius: 8px;
   outline: none;
   min-width: 0;
+  background: #fff;
+  box-sizing: border-box;
 }
+
 
 /* 부서: 가장 넓게 */
 .dept-input {
