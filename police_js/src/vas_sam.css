@@ -236,12 +236,41 @@
 
 /* ✅ 모바일에서 축이 밖으로 튀어나가서 가로스크롤 생기는 것 방지 */
 @media (max-width: 480px) {
+  .precheckModal {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    padding: 14px;
+  }
+
+  .sam__intro {
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+
+  /* 세로축이 너무 바깥으로 나가면 화면 폭을 잡아먹음 */
   .sam__axisY {
-    left: -42px;
-    width: 52px;
+    left: -56px;
+    width: 64px;
     font-size: 11px;
   }
+
+  /* stage 아래 간격 줄이기 */
   .sam__axisX {
+    margin-top: 6px;
     font-size: 11px;
+    gap: 6px;
+  }
+
+  /* VAS 줄도 타이트하게 */
+  .vasRow {
+    gap: 10px;
+  }
+  .vasValue {
+    width: 44px;
+    font-size: 16px;
   }
 }
+
