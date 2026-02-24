@@ -62,24 +62,22 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  display: block;
-  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;    /* ✅ center 금지 */
   padding: 16px;
+  z-index: 2000;
   box-sizing: border-box;
 }
-/* iOS 최신 뷰포트 단위 대응(있으면 더 좋음) */
-@supports (height: 100dvh) {
-  .precheckOverlay { height: 100dvh; }
-}
+
 .precheckModal {
   width: 600px;
   max-width: 96vw;
-  max-height: 92vh;
 
-  margin: 16px auto;
-  max-height: none;
-  overflow: visible;
-  overflow-x: hidden; /* ✅ 가로 스크롤 방지 */
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+
   background: #fff;
   border-radius: 18px;
   border: 1px solid #eee;
@@ -236,18 +234,19 @@
 
 /* ---- axis를 stage 기준으로 배치 ---- */
 .sam__wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  position: relative;
   width: fit-content;
   margin: 0 auto;
+
+  padding-left: 82px; 
 }
 
 /* axisY를 왼쪽에 절대배치 */
 .sam__axisY {
-  position: static;     /* ✅ absolute 제거 */
-  width: 66px;
+  position: absolute;
+  left: 0;            /* ✅ 음수 금지 */
+  top: 0;
+  width: 82px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -259,6 +258,14 @@
   pointer-events: none;
   }
 
+/* stage를 wrap padding 이후 영역에 자연스럽게 놓기 */
+.sam__stage{
+  margin: 0;          /* 기존 0 auto였으면 0으로 */
+}
+@media (max-width: 480px){
+  .sam__wrap{ padding-left: 62px; }
+  .sam__axisY{ width: 62px; font-size: 11px; }
+}
 
 .sam__axisYMid {
     writing-mode: horizontal-tb;
@@ -331,13 +338,25 @@
 
   /* VAS 줄도 타이트하게 */
   .vasRow {
-    gap: 10px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: nowrap;  
   }
-  .vasValue {
-    width: 44px;
-    font-size: 16px;
-  }
+.vasSlider{
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;           /* ✅ 420px 고정 제거 */
 }
+
+.vasValue{
+    flex: 0 0 56px;
+    white-space: nowrap;
+}
+@media (max-width: 480px){
+    .vasValue{ flex-basis: 44px; font-size: 16px; }
+  }
+
 
 
 
