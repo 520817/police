@@ -276,11 +276,6 @@ export default function App() {
       alert("먼저 대화를 시작해 주세요.");
       return;
     }
-
-    if (!sessionId) {
-      alert("세션이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
-      return;
-    }
     setConsentState(consent);
 
     const typingId = makeId();
@@ -390,7 +385,7 @@ export default function App() {
       alert("먼저 생체신호 분석 동의 또는 거절을 선택해 주세요.");
       return;
     }
-    
+
     // 세션ID 없으면 방지
     if (!sessionId) {
       alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
@@ -735,7 +730,7 @@ function MessageList({
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
-              disabled={Boolean(currentTypingId)}
+              disabled={Boolean(currentTypingId) || !sessionId}
             />
           )}
         </React.Fragment>
