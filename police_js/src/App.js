@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import PrecheckModal from "./vas_sam";
 
-//const apiOrigin = "http://localhost:8000"; // 백엔드 origin
+// const apiOrigin = "http://localhost:8000"; // 백엔드 origin
 const apiOrigin = "https://police-pwfu.onrender.com";
 
 function makeId() {
@@ -184,8 +184,11 @@ export default function App() {
       if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
       const data = await res.json();
 
-      if (data.session_id) setSessionId(data.session_id);
-      if (data.consent_state) setConsentState(data.consent_state);
+     if (data.session_id) {
+          setSessionId(data.session_id);
+     } else {
+          throw new Error("서버가 session_id를 반환하지 않았습니다.");
+        }
 
       // 대화 시작 플래그 on
       setStarted(true);
@@ -195,13 +198,12 @@ export default function App() {
         id: makeId(),
         role: "ai",
         type: "consent_prompt",
-        isTyping: true,
+        isTyping: false,
         text:
           "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
       };
 
       setMessages((prev) => [...prev, consentAiMsg]);
-      setCurrentTypingId(consentAiMsg.id);
     } catch (e) {
       console.error(e);
       const errId = makeId();
@@ -274,6 +276,11 @@ export default function App() {
       alert("먼저 대화를 시작해 주세요.");
       return;
     }
+
+    if (!sessionId) {
+      alert("세션이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
     setConsentState(consent);
 
     const typingId = makeId();
@@ -301,8 +308,8 @@ export default function App() {
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
-      if (data.consent_state) setConsentState(data.consent_state);
-
+      //if (data.consent_state) setConsentState(data.consent_state);
+      
       const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
@@ -383,7 +390,7 @@ export default function App() {
       alert("먼저 생체신호 분석 동의 또는 거절을 선택해 주세요.");
       return;
     }
-
+    
     // 세션ID 없으면 방지
     if (!sessionId) {
       alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
@@ -662,12 +669,13 @@ export default function App() {
           onInlineAccept={() => handleConsent("accepted")}
           onInlineDecline={() => handleConsent("declined")}
           consentState={consentState}
-          pendingEnd={pendingEnd} // [ADD]
+          pendingEnd={pendingEnd}
+          sessionId={sessionId} 
         />
 
         <MessageForm
           onSendMessage={handleSendMessage}
-          disabled={!started || consentState === "unknown" || !userId || pendingEnd} // [CHANGED]
+          disabled={!started || consentState === "unknown" || !userId || pendingEnd || !sessionId}
         />
       </div>
     </div>
@@ -681,7 +689,8 @@ function MessageList({
   onInlineAccept,
   onInlineDecline,
   consentState,
-  pendingEnd, // [ADD]
+  pendingEnd,
+  sessionId
 }) {
   const bottomRef = useRef(null);
   useEffect(() => {
@@ -693,6 +702,13 @@ function MessageList({
     .map((m, i) => (m.type === "consent_prompt" ? i : -1))
     .filter((i) => i >= 0)
     .pop();
+
+    console.log(
+    "consentIdx", consentIdx,
+    "consentState", consentState,
+    "pendingEnd", pendingEnd,
+    "lastMsg", messages[messages.length - 1]
+  );
 
   return (
     <div className="messages-list">
