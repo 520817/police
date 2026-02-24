@@ -133,6 +133,17 @@ function PrecheckModalInner({
   initialSam = null,
 }) {
   // ✅ Hooks must not be conditional
+  import React, { useMemo, useState, useEffect } from "react"; 
+
+  function PrecheckModalInner(...) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+    
   const [vas, setVas] = useState(initialVas);
   const [vasTouched, setVasTouched] = useState(false);
 
