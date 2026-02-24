@@ -68,6 +68,7 @@
   padding: 16px;
   z-index: 2000;
   box-sizing: border-box;
+  isolation: isolate;
 }
 
 .precheckModal {
@@ -283,6 +284,8 @@
   font-size: 12px;
   user-select: none;
   pointer-events: none;
+
+  transform: translateX(12px); 
 }
 .sam__axisXLeft{ flex: 1; text-align: left; }
 .sam__axisXRight{ flex: 1; text-align: right; }
@@ -352,6 +355,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
