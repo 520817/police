@@ -2,8 +2,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import "./vas_sam.css";
 
-
-
 /* ---------------------------
  * CheckDot
  * --------------------------- */
@@ -35,7 +33,7 @@ function SamCircle({
 
   const cardClass = (active) => `sam__card ${active ? "sam__card--active" : ""}`;
 
-    return (
+  return (
     <div className="sam">
       <div className="sam__title">{title}</div>
 
@@ -46,11 +44,7 @@ function SamCircle({
       {/* ✅ 세로축 + 스테이지 묶음 */}
       <div className="sam__wrap">
         {/* ✅ Arousal (세로 한 줄/끝 라벨) */}
-        <div
-          className="sam__axisY"
-          style={{ height: size }}
-          aria-hidden="true"
-        >
+        <div className="sam__axisY" style={{ height: size }} aria-hidden="true">
           <div className="sam__axisYTop">에너지↑</div>
           <div className="sam__axisYMid">Arousal</div>
           <div className="sam__axisYBot">에너지↓</div>
@@ -133,9 +127,8 @@ function PrecheckModalInner({
   onDone,
   initialVas = 0,
   initialSam = null,
+  phase = "pre", // [ADD] "pre" | "post"
 }) {
-  // ✅ Hooks must not be conditional
-
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -143,7 +136,7 @@ function PrecheckModalInner({
       document.body.style.overflow = prevOverflow;
     };
   }, []);
-  
+
   const [vas, setVas] = useState(initialVas);
   const [vasTouched, setVasTouched] = useState(false);
 
@@ -151,37 +144,46 @@ function PrecheckModalInner({
 
   const canSubmit = vasTouched && sam !== null;
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-
-    const payload = {
-      type: "pre",
-      vas,
-      sam: sam,
-      created_at: new Date().toISOString(),
-    };
-
-    localStorage.setItem("precheck", JSON.stringify(payload));
-
-    onDone?.(payload);
-    onClose?.();
-  };
-
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 480;
 
-  // 모달 패딩(22*2) + 축 여백(left:-75px 고려) 감안해서 안전하게 계산
+  // 모달 패딩 감안해서 안전하게 계산
   const samSize = useMemo(() => {
     if (typeof window === "undefined") return 320;
     const vw = window.innerWidth;
     const max = 380;
     const min = 240;
-    // 모바일: 화면폭에 맞춰 줄이기 (대충 0.78*vw)
     const s = Math.floor(vw * (isMobile ? 0.78 : 0.62));
     return Math.max(min, Math.min(max, s));
   }, [isMobile]);
-  
-  const faceOuter = Math.round(samSize * 0.18);  
+
+  const faceOuter = Math.round(samSize * 0.18);
   const faceCenter = Math.round(samSize * 0.19);
+
+  // [ADD] phase별 문구
+  const title = phase === "post" ? "대화 후 상태 체크" : "대화 전 상태 체크";
+  const desc =
+    phase === "post"
+      ? "대화를 마치기 전, 현재 상태를 선택한 뒤 제출 버튼을 클릭하세요."
+      : "대화를 시작하기 전, 현재 상태를 선택한 뒤 제출 버튼을 클릭하세요.";
+  const submitLabel = phase === "post" ? "제출하고 대화 종료" : "제출하고 대화 시작";
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+
+    const payload = {
+      type: phase, // [CHANGED] "pre" | "post"
+      vas,
+      sam: sam,
+      created_at: new Date().toISOString(),
+    };
+
+    // 저장 키도 phase로 분리하고 싶으면 아래처럼:
+    // localStorage.setItem(`${phase}check`, JSON.stringify(payload));
+    localStorage.setItem("precheck", JSON.stringify(payload)); // 기존 유지(원하면 바꿔도 됨)
+
+    onDone?.(payload);
+    onClose?.();
+  };
 
   return (
     <div
@@ -196,11 +198,16 @@ function PrecheckModalInner({
         {/* 헤더 */}
         <div className="precheckHeader">
           <div>
-            <h1>대화 전/후 상태 체크</h1>
-            <p>스트레스 정도와 정서 상태를 선택한 뒤 제출 버튼을 클릭하세요.</p>
+            <h1>{title}</h1>
+            <p>{desc}</p>
           </div>
 
-          <button type="button" onClick={onClose} aria-label="닫기" className="precheckCloseBtn">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="precheckCloseBtn"
+          >
             ✕
           </button>
         </div>
@@ -225,7 +232,9 @@ function PrecheckModalInner({
             <div className="vasValue">{vasTouched ? vas : "-"}</div>
           </div>
 
-          {!vasTouched ? <div className="vasHelp">슬라이더를 한 번 움직여서 값을 선택해 주세요.</div> : null}
+          {!vasTouched ? (
+            <div className="vasHelp">슬라이더를 한 번 움직여서 값을 선택해 주세요.</div>
+          ) : null}
         </div>
 
         {/* SAM */}
@@ -253,7 +262,7 @@ function PrecheckModalInner({
               canSubmit ? "precheckSubmitBtn--enabled" : "precheckSubmitBtn--disabled",
             ].join(" ")}
           >
-            제출
+            {submitLabel}
           </button>
 
           {!canSubmit ? (
@@ -262,7 +271,6 @@ function PrecheckModalInner({
             <div className="precheckOk">선택 완료!</div>
           )}
         </div>
-
       </div>
     </div>
   );
