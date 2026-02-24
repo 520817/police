@@ -273,24 +273,20 @@
 }
 
 /* 가로축(Valence) */
-.sam__axisX {
+.sam__axisX{
   margin-top: 10px;
-  white-space: pre;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 10px;
   opacity: 0.55;
   font-size: 12px;
   user-select: none;
   pointer-events: none;
 }
-
-.sam__axisXLine {
-  white-space: nowrap;
-  font-weight: 500;
-  opacity: 0.85;
-}
+.sam__axisXLeft{ flex: 1; text-align: left; }
+.sam__axisXRight{ flex: 1; text-align: right; }
+.sam__axisXLine{ flex: 0 0 auto; text-align: center; font-weight: 500; opacity: 0.85; }
 
 /* ✅ 모바일에서 축이 밖으로 튀어나가서 가로스크롤 생기는 것 방지 */
 @media (max-width: 480px) {
@@ -356,6 +352,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
