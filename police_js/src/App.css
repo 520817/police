@@ -68,10 +68,12 @@ body {
   height: auto;
 }
 
+.profile-row > * { min-width: 0; }
+
 /* ===== 프로필 2줄 구조 ===== */
 .profile-row{
   display: grid;
-  grid-template-columns: 1fr 110px 120px; /* rank / shift / button */
+  grid-template-columns: 1fr 120px 120px; /* rank / shift / button */
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
@@ -93,9 +95,24 @@ body {
   white-space: nowrap;
 }
 
+.shift-input{
+  -webkit-appearance: none;
+  appearance: none;
+  background: #fff;
+  padding-right: 34px;                 /* 화살표 공간 */
+  background-image:
+    linear-gradient(45deg, transparent 50%, #666 50%),
+    linear-gradient(135deg, #666 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
 @media (max-width: 480px){
   .profile-row{
-    grid-template-columns: 1fr 90px 95px; /* rank / shift / button */
+    grid-template-columns: 1fr 96px 96px; /* rank / shift / button */
     gap: 6px;
   }
 
@@ -107,8 +124,6 @@ body {
   .start-button{
     font-size: 13px;
     padding: 10px 8px;
-    grid-column: 3 / 4; /* ✅ 모바일도 같은 줄 */
-    width: 100%;
   }
 }
 
