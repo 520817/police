@@ -173,6 +173,13 @@
   white-space: nowrap;
 }
 
+@media (max-width: 480px){
+  .vasInlineValue {
+    width: 40px;
+    font-size: 16px;
+  }
+}
+
 /* ---------- Grid (Valence / Arousal) ---------- */
 .samGrid {
   display: grid;
@@ -330,6 +337,7 @@
     font-size: 16px;
   }
 }
+
 
 
 
