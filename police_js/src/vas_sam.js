@@ -199,7 +199,7 @@ function PrecheckModalInner({
         <div className="vasBlock">
           <div className="vasLabel">현재 스트레스 정도 (0=전혀 없음, 100=매우 심함)</div>
 
-          <div className="vasRow">
+          <div className="vasInlineRow">
             <input
               className="vasSlider"
               type="range"
