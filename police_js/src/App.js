@@ -299,6 +299,9 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: "",
+          dept,
+          rank,
+          shift_type: shiftType,
           biosignal_consent: consent,
           user_id: userId,
           session_id: sessionId,
@@ -419,11 +422,18 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: message,
+          dept,
+          rank,
+          shift_type: shiftType,
           user_id: userId,
           session_id: sessionId,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
+      if (!res.ok) {
+      const t = await res.text();
+      console.error("API ERROR", res.status, t);
+      throw new Error(`HTTP ${res.status} ${t}`);
+    }
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
