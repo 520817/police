@@ -285,7 +285,7 @@
   user-select: none;
   pointer-events: none;
 
-  transform: translateX(12px); 
+  transform: translateX(20px); 
 }
 .sam__axisXLeft{ flex: 1; text-align: left; }
 .sam__axisXRight{ flex: 1; text-align: right; }
@@ -355,6 +355,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
