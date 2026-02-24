@@ -116,8 +116,7 @@ function SamCircle({
       {/* ✅ Valence (가로 한 줄) */}
       <div className="sam__axisX" aria-hidden="true">
         <span className="sam__axisXLeft">부정/불쾌</span>
-        <span className="sam__axisXLine">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-          Valence&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        <span className="sam__axisXLine">Valence</span>
         <span className="sam__axisXRight">긍정/쾌</span>
       </div>
     </div>
