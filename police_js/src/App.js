@@ -64,7 +64,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [currentTypingId, setCurrentTypingId] = useState(null);
 
-  // sessionId 제거 → 대화 시작 여부만 관리
+  // 대화 시작 여부
   const [started, setStarted] = useState(false);
 
   const [dept, setDept] = useState("");
@@ -79,9 +79,9 @@ export default function App() {
   // 전화번호 기반 user_id 관리
   const [userId, setUserId] = useState(null);
 
-  // [ADD] pre/post 체크 단계
+  // pre/post 체크 단계
   const [precheckPhase, setPrecheckPhase] = useState("pre"); // "pre" | "post"
-  // [ADD] 종료 확정 대기 (post 제출하면 진짜 종료)
+  // 종료 확정 대기 (post 제출하면 진짜 종료)
   const [pendingEnd, setPendingEnd] = useState(false);
 
   // precheck 결과 있으면 시작 허용
@@ -100,13 +100,13 @@ export default function App() {
     const storedUserId = localStorage.getItem("user_id");
     if (storedUserId) {
       setUserId(storedUserId);
-      // [CHANGED] 첫 진입은 pre 체크부터
+      // 첫 진입은 pre 체크부터
       setPrecheckPhase("pre");
       setPendingEnd(false);
       setPrecheckData(null);
       setShowPrecheck(true);
     } else {
-      setShowPhoneModal(true); // 저장된 ID 없으면 모달 띄우기
+      setShowPhoneModal(true);
     }
 
     const storedDept = localStorage.getItem("dept");
@@ -119,7 +119,7 @@ export default function App() {
   // 전화번호 제출
   const handlePhoneSubmit = () => {
     const trimmed = phoneInput.trim();
-    const regex = /^01[0-9]{9}$/; // 010 포함 11자리
+    const regex = /^01[0-9]{9}$/;
 
     if (!regex.test(trimmed)) {
       setPhoneError("올바른 11자리 번호를 입력해 주세요. (예: 01012345678)");
@@ -129,11 +129,9 @@ export default function App() {
     setPhoneError("");
     setShowPhoneModal(false);
 
-    // 여기서는 전화번호를 그대로 user_id로 사용
     localStorage.setItem("user_id", trimmed);
     setUserId(trimmed);
 
-    // [CHANGED] 전화번호 입력 후에도 pre 체크부터
     setPrecheckPhase("pre");
     setPendingEnd(false);
     setPrecheckData(null);
@@ -152,20 +150,19 @@ export default function App() {
       alert("부서와 계급을 입력해 주세요.");
       return;
     }
-    // [ADD] precheck 완료 전엔 시작 금지
     if (!canChat) {
       alert("대화 전 상태 체크를 먼저 완료해 주세요.");
       return;
     }
     if (starting) return;
 
-    // [ADD] 시작 시엔 종료대기 상태 해제
     setPrecheckPhase("pre");
     setPendingEnd(false);
 
-    // 새 대화 시작이니까 동의 상태 리셋
+    // ✅ FIX: session_id가 서버에서 안 오더라도,
+    // 프론트에서는 userId를 sessionId로 미리 세팅해 두면 UI가 안정적임
     setConsentState("unknown");
-    setSessionId(null);
+    setSessionId(userId); // ✅ FIX (중요)
     setStarting(true);
 
     try {
@@ -178,11 +175,10 @@ export default function App() {
           rank,
           shift_type: shiftType,
           user_id: userId,
-          session_id: "",
+          session_id: "", // 서버가 안 써도 됨
         }),
       });
 
-      // [FIX] body는 한 번만 읽기
       const raw = await res.text();
       console.log("[START] status:", res.status);
       console.log("[START] raw response:", raw);
@@ -191,7 +187,6 @@ export default function App() {
         throw new Error(`HTTP ${res.status} ${raw}`);
       }
 
-      // [FIX] JSON 파싱
       let data = null;
       try {
         data = JSON.parse(raw);
@@ -201,7 +196,7 @@ export default function App() {
 
       console.log("[START] parsed data:", data);
 
-      // [FIX] session_id 후보 넓게
+      // 서버가 session_id를 안 주는 스펙이므로 fallback 유지
       const sid =
         data.session_id ??
         data.sessionId ??
@@ -213,16 +208,14 @@ export default function App() {
         setSessionId(sid);
       } else {
         console.warn(
-          "session_id 없음 → user_id를 session 대체로 사용",
+          "[START] session_id 없음(서버 스펙). user_id를 session 대체로 사용",
           Object.keys(data)
         );
-        setSessionId(userId); 
+        setSessionId(userId); // ✅ FIX
       }
 
-      // 대화 시작 플래그 on
       setStarted(true);
 
-      // 새 세션용 동의 요청 메시지
       const consentAiMsg = {
         id: makeId(),
         role: "ai",
@@ -242,34 +235,33 @@ export default function App() {
         {
           id: errId,
           role: "ai",
-          // [FIX] 어떤 에러인지 화면에도 보이게
           text: `서버 통신 오류(START): ${String(e?.message || e)}`,
           isTyping: false,
         },
       ]);
       setCurrentTypingId(errId);
+
+      // ✅ FIX: 시작 실패 시 sessionId 정리
+      setSessionId(null);
     } finally {
       setStarting(false);
     }
-  }; // ✅ [FIX] handleStart 닫기(중괄호/스코프 꼬임 방지)
+  };
 
   // =========================
-  // 2. 대화 종료 (버튼 클릭: 바로 종료 X → post 모달 띄움)
+  // 2. 대화 종료
   // =========================
   const handleEndConversation = () => {
     if (!started) return;
 
-    // 종료 버튼 누르면 "post 체크" 모달부터
     setPrecheckPhase("post");
     setPendingEnd(true);
 
-    setPrecheckData(null); // post도 새로 측정 강제
-    setShowPrecheck(true); // 모달 열기
+    setPrecheckData(null);
+    setShowPrecheck(true);
   };
 
-  // post-check 제출 시 진짜 종료 처리
   const finalizeEndConversation = () => {
-    // 마지막에 종료 메시지 추가
     const endId = makeId();
     setMessages((prev) => [
       ...prev,
@@ -284,21 +276,17 @@ export default function App() {
     ]);
     setCurrentTypingId(endId);
 
-    // 상태 정리
     setStarted(false);
     setConsentState("ended");
     setStarting(false);
     setSessionId(null);
-
-    // 종료대기 해제
     setPendingEnd(false);
   };
 
   // =========================
-  // 3. 동의/거절 버튼
+  // 3. 동의/거절
   // =========================
   const handleConsent = async (consent) => {
-    // 종료 대기 중이면 동의/거절 못 누르게
     if (pendingEnd) {
       alert("종료 절차 진행 중입니다. 상태 체크 제출을 완료해 주세요.");
       return;
@@ -308,8 +296,10 @@ export default function App() {
       return;
     }
 
-    if (!sessionId) {
-      alert("세션이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+    // ✅ FIX: sessionId가 없으면 userId로 fallback
+    const effectiveSessionId = sessionId || userId; // ✅ FIX
+    if (!effectiveSessionId) {
+      alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
       return;
     }
 
@@ -319,7 +309,6 @@ export default function App() {
     const placeholderText =
       consent === "accepted" ? "생체신호 분석 중..." : "진행 중...";
 
-    // placeholder 추가
     setMessages((prev) => [
       ...prev,
       { id: typingId, role: "ai", text: placeholderText, isTyping: true },
@@ -332,17 +321,15 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: "",
-          // [FIX] 항상 같이 보내기
           dept,
           rank,
           shift_type: shiftType,
           biosignal_consent: consent,
           user_id: userId,
-          session_id: sessionId,
+          session_id: effectiveSessionId, // ✅ FIX
         }),
       });
 
-      // [FIX] body 1번만 읽기
       const raw = await res.text();
       console.log("[CONSENT] status:", res.status);
       console.log("[CONSENT] raw:", raw);
@@ -358,7 +345,14 @@ export default function App() {
         throw new Error("CONSENT 응답이 JSON이 아닙니다.");
       }
 
-      if (data.session_id) setSessionId(data.session_id);
+      // ✅ FIX: session_id가 없으면 유지
+      const sid =
+        data.session_id ??
+        data.sessionId ??
+        data.session ??
+        data.sid ??
+        null;
+      if (sid) setSessionId(sid);
 
       const arr = Array.isArray(data.replies)
         ? data.replies
@@ -367,11 +361,9 @@ export default function App() {
         : [];
       const plotPath = data.plot_path || null;
 
-      // "이미지 → 텍스트" 순서 보장
       setMessages((prev) => {
         let next = [...prev];
 
-        // 1) plot 먼저
         if (plotPath) {
           next.push({
             id: makeId(),
@@ -382,14 +374,12 @@ export default function App() {
           });
         }
 
-        // 2) placeholder 교체
         next = next.map((m) =>
           m.id === typingId
             ? { ...m, text: arr[0] || "(응답 없음)", isTyping: false }
             : m
         );
 
-        // 3) 나머지 텍스트 붙이기
         if (arr.length > 1) {
           const rest = arr.slice(1).map((t) => ({
             id: makeId(),
@@ -427,7 +417,6 @@ export default function App() {
       alert("전화번호를 먼저 입력해 주세요.");
       return;
     }
-    // 종료 대기 중이면 입력 금지
     if (pendingEnd) {
       alert("종료 절차 진행 중입니다. 상태 체크 제출을 완료해 주세요.");
       return;
@@ -441,8 +430,9 @@ export default function App() {
       return;
     }
 
-    // 세션ID 없으면 방지
-    if (!sessionId) {
+    // ✅ FIX: sessionId 없으면 userId
+    const effectiveSessionId = sessionId || userId; // ✅ FIX
+    if (!effectiveSessionId) {
       alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
       return;
     }
@@ -470,12 +460,11 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: message,
-          // [FIX] 항상 같이 보내기
           dept,
           rank,
           shift_type: shiftType,
           user_id: userId,
-          session_id: sessionId,
+          session_id: effectiveSessionId, // ✅ FIX
         }),
       });
 
@@ -487,7 +476,14 @@ export default function App() {
 
       const data = await res.json();
 
-      if (data.session_id) setSessionId(data.session_id);
+      // ✅ FIX: session_id 있으면 갱신
+      const sid =
+        data.session_id ??
+        data.sessionId ??
+        data.session ??
+        data.sid ??
+        null;
+      if (sid) setSessionId(sid);
 
       const arr = Array.isArray(data.replies)
         ? data.replies
@@ -496,7 +492,6 @@ export default function App() {
         : [];
       const plotPath = data.plot_path || null;
 
-      // 일반 턴에서도 plot 있으면 이미지 먼저
       setMessages((prev) => {
         let next = [...prev];
 
@@ -510,14 +505,12 @@ export default function App() {
           });
         }
 
-        // placeholder 교체
         next = next.map((m) =>
           m.id === typingId
             ? { ...m, text: arr[0] || "(응답 없음)", isTyping: false }
             : m
         );
 
-        // 추가 응답
         if (arr.length > 1) {
           const rest = arr.slice(1).map((t) => ({
             id: makeId(),
@@ -576,13 +569,11 @@ export default function App() {
           setPrecheckData(payload);
           setShowPrecheck(false);
 
-          // post 제출이면 "완전 종료" 확정
           if (precheckPhase === "post" && pendingEnd) {
             finalizeEndConversation();
             return;
           }
 
-          // pre 제출이면 시작 준비 완료
           console.log("precheck:", payload);
         }}
       />
@@ -629,13 +620,7 @@ export default function App() {
               }}
             />
             {phoneError && (
-              <div
-                style={{
-                  color: "red",
-                  fontSize: 12,
-                  marginTop: 4,
-                }}
-              >
+              <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>
                 {phoneError}
               </div>
             )}
@@ -663,11 +648,7 @@ export default function App() {
         <div className="chat-header">
           <h1>경찰관 전용 AI 챗봇</h1>
           <div className="logo-group">
-            <img
-              src="/images/police.PNG"
-              alt="경찰청 로고"
-              className="chat-logo"
-            />
+            <img src="/images/police.PNG" alt="경찰청 로고" className="chat-logo" />
             <img src="/images/kist.PNG" alt="키스트 로고" className="chat-logo" />
           </div>
         </div>
@@ -740,13 +721,7 @@ export default function App() {
 
         <MessageForm
           onSendMessage={handleSendMessage}
-          disabled={
-            !started ||
-            consentState === "unknown" ||
-            !userId ||
-            pendingEnd ||
-            !sessionId
-          }
+          disabled={!started || consentState === "unknown" || !userId || pendingEnd}
         />
       </div>
     </div>
@@ -768,7 +743,6 @@ function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentTypingId]);
 
-  // [FIX] undefined 대신 -1
   const consentIdx = messages.findLastIndex((m) => m.type === "consent_prompt");
 
   console.log(
@@ -802,14 +776,16 @@ function MessageList({
             />
           )}
 
-          {/* 동의 버튼 표시 */}
-          {i === consentIdx && consentIdx !== -1 && consentState === "unknown" && !pendingEnd && (
-            <InlineConsent
-              onAccept={onInlineAccept}
-              onDecline={onInlineDecline}
-              disabled={Boolean(currentTypingId)}
-            />
-          )}
+          {i === consentIdx &&
+            consentIdx !== -1 &&
+            consentState === "unknown" &&
+            !pendingEnd && (
+              <InlineConsent
+                onAccept={onInlineAccept}
+                onDecline={onInlineDecline}
+                disabled={Boolean(currentTypingId)}
+              />
+            )}
         </React.Fragment>
       ))}
       <div ref={bottomRef} />
