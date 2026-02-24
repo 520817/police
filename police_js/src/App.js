@@ -258,12 +258,6 @@ export default function App() {
 
     // 3) 종료대기 해제
     setPendingEnd(false);
-
-    // 4) (선택) 다음 회차를 위해 pre 체크를 다시 강제하고 싶으면 아래 3줄 유지
-    //    - 지금은 "완전 종료"만 하고, 다음 대화는 사용자가 '대화 시작' 누르기 전에 다시 pre 체크 띄우는 흐름으로도 OK
-    setPrecheckPhase("pre");
-    setPrecheckData(null);
-    setShowPrecheck(true);
   };
 
   // =========================
