@@ -243,6 +243,7 @@
 .sam__axisX {
   margin-top: 10px;
   margin-left: var(--axisY);
+  transform: translateX(82px);  
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -252,6 +253,7 @@
   user-select: none;
   pointer-events: none;
 }
+
 .sam__axisXLeft {
   flex: 1;
   text-align: left;
@@ -266,6 +268,7 @@
   font-weight: 500;
   opacity: 0.85;
 }
+
 
 /* ---------- Mobile ---------- */
 @media (max-width: 480px) {
@@ -303,7 +306,9 @@
 
   .sam__axisX {
     margin-top: 6px;
+    transform: translateX(62px);
     font-size: 11px;
     gap: 6px;
   }
 }
+
