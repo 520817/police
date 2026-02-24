@@ -157,6 +157,22 @@ function PrecheckModalInner({
     onClose?.();
   };
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 480;
+
+  // 모달 패딩(22*2) + 축 여백(left:-75px 고려) 감안해서 안전하게 계산
+  const samSize = useMemo(() => {
+    if (typeof window === "undefined") return 320;
+    const vw = window.innerWidth;
+    const max = 380;
+    const min = 240;
+    // 모바일: 화면폭에 맞춰 줄이기 (대충 0.78*vw)
+    const s = Math.floor(vw * (isMobile ? 0.78 : 0.62));
+    return Math.max(min, Math.min(max, s));
+  }, [isMobile]);
+  
+  const faceOuter = Math.round(samSize * 0.18);  
+  const faceCenter = Math.round(samSize * 0.19);
+
   return (
     <div
       role="dialog"
@@ -209,6 +225,9 @@ function PrecheckModalInner({
               title="SAM"
               value={sam}
               onChange={setSam}
+              size={samSize}
+              faceSizeOuter={faceOuter}
+              faceSizeCenter={faceCenter}
             />
           </div>
         </div>
