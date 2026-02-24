@@ -86,6 +86,7 @@ body {
 
 .dept-input{
   grid-column: 1 / -1;
+  width: 100%;
 }
 
 /* 2줄: rank, shift, button */
@@ -159,8 +160,6 @@ body {
 
 /* ====== Buttons ====== */
 .send-button {
-  white-space: nowrap;   /* 줄바꿈 금지 */
-  line-height: 1;        /* iOS에서 두 줄처럼 보이는 느낌 방지 */
   padding: 12px 16px;
   font-size: 14px;
   border: none;
@@ -168,8 +167,26 @@ body {
   color: #fff;
   border-radius: 8px;
   cursor: pointer;
+  white-space: nowrap;
 }
-.message-form .send-button { min-width: 64px;  /* 최소 너비 확보 */ }
+.message-form .send-button{
+  min-width: 76px;     /* 64 -> 76 (핵심) */
+  height: 44px;        /* 높이 고정 */
+  padding: 0 14px;     /* 세로 padding 제거 */
+  line-height: 44px;   /* 텍스트 세로 중앙 + 두줄처럼 보임 방지 */
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px){
+  .message-form .send-button{
+    min-width: 72px;
+    height: 42px;
+    line-height: 42px;
+    font-size: 13px;
+  }
+}
+
 .send-button:hover { opacity: 0.9; }
 
 .end-button { background: #dc2626; }
