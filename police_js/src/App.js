@@ -169,58 +169,88 @@ export default function App() {
     setStarting(true);
 
     try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: "",
-          dept,
-          rank,
-          shift_type: shiftType,
-          user_id: userId,
-          session_id: "",
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
-      const data = await res.json();
+       const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: "",
+      dept,
+      rank,
+      shift_type: shiftType,
+      user_id: userId,
+      session_id: "",
+    }),
+  });
 
-     if (data.session_id) {
-          setSessionId(data.session_id);
-     } else {
-          throw new Error("서버가 session_id를 반환하지 않았습니다.");
-        }
+  // ✅ body는 한 번만 읽기
+  const raw = await res.text();
+  console.log("[START] status:", res.status);
+  console.log("[START] raw response:", raw);
 
-      // 대화 시작 플래그 on
-      setStarted(true);
+  // ✅ 에러면 raw 그대로 보여주고 종료
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${raw}`);
+  }
 
-      // 새 세션용 동의 요청 메시지를 기존 기록 아래에 붙이기
-      const consentAiMsg = {
-        id: makeId(),
-        role: "ai",
-        type: "consent_prompt",
-        isTyping: false,
-        text:
-          "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
-      };
+  // ✅ JSON 파싱
+  let data = null;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    throw new Error("서버 응답이 JSON이 아닙니다. raw를 콘솔에서 확인하세요.");
+  }
 
-      setMessages((prev) => [...prev, consentAiMsg]);
-    } catch (e) {
-      console.error(e);
-      const errId = makeId();
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: errId,
-          role: "ai",
-          text: "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-          isTyping: true,
-        },
-      ]);
-      setCurrentTypingId(errId);
-    } finally {
-      setStarting(false);
-    }
+  console.log("[START] parsed data:", data);
+
+  // ✅ session_id 후보 넓게
+  const sid =
+    data.session_id ??
+    data.sessionId ??
+    data.session ??
+    data.sid ??
+    null;
+
+  if (sid) {
+    setSessionId(sid);
+  } else {
+    throw new Error(
+      `서버가 session_id를 반환하지 않았습니다. 반환된 키: ${Object.keys(data).join(", ")}`
+    );
+  }
+
+  // ✅ 대화 시작 플래그 on
+  setStarted(true);
+
+  // ✅ consent_prompt 추가
+  const consentAiMsg = {
+    id: makeId(),
+    role: "ai",
+    type: "consent_prompt",
+    isTyping: false,
+    text:
+      "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
   };
+  setMessages((prev) => [...prev, consentAiMsg]);
+} catch (e) {
+  console.error(e);
+
+  const errId = makeId();
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: errId,
+      role: "ai",
+      text:
+        "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.\n\n" +
+        "(개발자 콘솔에 [START] 로그를 확인해 주세요.)",
+      isTyping: false,
+    },
+  ]);
+      
+  setCurrentTypingId(errId);
+} finally {
+  setStarting(false);
+}
 
   // =========================
   // 2. 대화 종료 (버튼 클릭: 바로 종료 X → post 모달 띄움)
