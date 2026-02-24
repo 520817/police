@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import PrecheckModal from "./vas_sam";
 
-#const apiOrigin = "http://localhost:8000"; // 백엔드 origin
+// const apiOrigin = "http://localhost:8000"; // 백엔드 origin
 const apiOrigin = "https://police-pwfu.onrender.com";
 
 function makeId() {
