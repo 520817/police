@@ -71,7 +71,7 @@ body {
 /* ===== 프로필 2줄 구조 ===== */
 .profile-row{
   display: grid;
-  grid-template-columns: 1fr 110px 90px 100px;
+  grid-template-columns: 1fr 110px 120px; /* rank / shift / button */
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
@@ -79,35 +79,23 @@ body {
 
 /* 1줄: 부서 전체폭 */
 .profile-row .message-input:not(.rank-input):not(.shift-input){
-  grid-column: 1 / -1;   /* ✅ 첫 줄 전체 */
+  grid-column: 1 / -1;   /* 첫 줄 전체 */
 }
 
-/* 2줄: 계급 */
-.rank-input{
-  grid-column: 1 / 2;
-}
+/* 2줄: rank, shift, button */
+.rank-input{ grid-column: 1 / 2; }
+.shift-input{ grid-column: 2 / 3; }
 
-/* 2줄: 근무형태 */
-.shift-input{
-  grid-column: 2 / 3;
-}
-
-/* 2줄: 대화시작 버튼 */
+/* 2줄: 시작/종료 버튼 (같은 줄, 3번째 칸) */
 .start-button{
-  grid-column: 3 / 5;   /* 두 칸 차지 */
+  grid-column: 3 / 4;
+  width: 100%;
   white-space: nowrap;
 }
 
-/* start/end button은 다음 줄 전체 폭 */
-.start-button {
-  grid-column: 1 / -1;
-  width: 100%;
-}
-
 @media (max-width: 480px){
-
   .profile-row{
-    grid-template-columns: 1fr 90px 85px 95px;
+    grid-template-columns: 1fr 90px 95px; /* rank / shift / button */
     gap: 6px;
   }
 
@@ -119,6 +107,8 @@ body {
   .start-button{
     font-size: 13px;
     padding: 10px 8px;
+    grid-column: 3 / 4; /* ✅ 모바일도 같은 줄 */
+    width: 100%;
   }
 }
 
