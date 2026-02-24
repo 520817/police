@@ -4,7 +4,7 @@ import "./App.css";
 import PrecheckModal from "./vas_sam";
 
 #const apiOrigin = "http://localhost:8000"; // 백엔드 origin
-const apiOrigin = "http://192.168.0.12:8000";
+const apiOrigin = "https://police-pwfu.onrender.com";
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
