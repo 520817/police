@@ -212,12 +212,11 @@ export default function App() {
       if (sid) {
         setSessionId(sid);
       } else {
-        // [FIX] 어떤 키가 왔는지 명확히
-        throw new Error(
-          `서버가 session_id를 반환하지 않았습니다. 반환된 키: ${Object.keys(data).join(
-            ", "
-          )}`
+        console.warn(
+          "session_id 없음 → user_id를 session 대체로 사용",
+          Object.keys(data)
         );
+        setSessionId(userId); 
       }
 
       // 대화 시작 플래그 on
