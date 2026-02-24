@@ -169,88 +169,90 @@ export default function App() {
     setStarting(true);
 
     try {
-       const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: "",
-      dept,
-      rank,
-      shift_type: shiftType,
-      user_id: userId,
-      session_id: "",
-    }),
-  });
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: "",
+          dept,
+          rank,
+          shift_type: shiftType,
+          user_id: userId,
+          session_id: "",
+        }),
+      });
 
-  // ✅ body는 한 번만 읽기
-  const raw = await res.text();
-  console.log("[START] status:", res.status);
-  console.log("[START] raw response:", raw);
+      // [FIX] body는 한 번만 읽기
+      const raw = await res.text();
+      console.log("[START] status:", res.status);
+      console.log("[START] raw response:", raw);
 
-  // ✅ 에러면 raw 그대로 보여주고 종료
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${raw}`);
-  }
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${raw}`);
+      }
 
-  // ✅ JSON 파싱
-  let data = null;
-  try {
-    data = JSON.parse(raw);
-  } catch (e) {
-    throw new Error("서버 응답이 JSON이 아닙니다. raw를 콘솔에서 확인하세요.");
-  }
+      // [FIX] JSON 파싱
+      let data = null;
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        throw new Error("서버 응답이 JSON이 아닙니다. raw를 콘솔에서 확인하세요.");
+      }
 
-  console.log("[START] parsed data:", data);
+      console.log("[START] parsed data:", data);
 
-  // ✅ session_id 후보 넓게
-  const sid =
-    data.session_id ??
-    data.sessionId ??
-    data.session ??
-    data.sid ??
-    null;
+      // [FIX] session_id 후보 넓게
+      const sid =
+        data.session_id ??
+        data.sessionId ??
+        data.session ??
+        data.sid ??
+        null;
 
-  if (sid) {
-    setSessionId(sid);
-  } else {
-    throw new Error(
-      `서버가 session_id를 반환하지 않았습니다. 반환된 키: ${Object.keys(data).join(", ")}`
-    );
-  }
+      if (sid) {
+        setSessionId(sid);
+      } else {
+        // [FIX] 어떤 키가 왔는지 명확히
+        throw new Error(
+          `서버가 session_id를 반환하지 않았습니다. 반환된 키: ${Object.keys(data).join(
+            ", "
+          )}`
+        );
+      }
 
-  // ✅ 대화 시작 플래그 on
-  setStarted(true);
+      // 대화 시작 플래그 on
+      setStarted(true);
 
-  // ✅ consent_prompt 추가
-  const consentAiMsg = {
-    id: makeId(),
-    role: "ai",
-    type: "consent_prompt",
-    isTyping: false,
-    text:
-      "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
-  };
-  setMessages((prev) => [...prev, consentAiMsg]);
-} catch (e) {
-  console.error(e);
+      // 새 세션용 동의 요청 메시지
+      const consentAiMsg = {
+        id: makeId(),
+        role: "ai",
+        type: "consent_prompt",
+        isTyping: false,
+        text:
+          "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
+      };
 
-  const errId = makeId();
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: errId,
-      role: "ai",
-      text:
-        "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.\n\n" +
-        "(개발자 콘솔에 [START] 로그를 확인해 주세요.)",
-      isTyping: false,
-    },
-  ]);
-      
-  setCurrentTypingId(errId);
-} finally {
-  setStarting(false);
-}
+      setMessages((prev) => [...prev, consentAiMsg]);
+    } catch (e) {
+      console.error(e);
+
+      const errId = makeId();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: errId,
+          role: "ai",
+          // [FIX] 어떤 에러인지 화면에도 보이게
+          text: `서버 통신 오류(START): ${String(e?.message || e)}`,
+          isTyping: false,
+        },
+      ]);
+      setCurrentTypingId(errId);
+    } finally {
+      setStarting(false);
+    }
+  }; // ✅ [FIX] handleStart 닫기(중괄호/스코프 꼬임 방지)
 
   // =========================
   // 2. 대화 종료 (버튼 클릭: 바로 종료 X → post 모달 띄움)
@@ -258,7 +260,7 @@ export default function App() {
   const handleEndConversation = () => {
     if (!started) return;
 
-    // [CHANGED] 종료 버튼 누르면 "post 체크" 모달부터 띄우고, 제출 시 진짜 종료되게 함
+    // 종료 버튼 누르면 "post 체크" 모달부터
     setPrecheckPhase("post");
     setPendingEnd(true);
 
@@ -266,9 +268,9 @@ export default function App() {
     setShowPrecheck(true); // 모달 열기
   };
 
-  // [ADD] post-check 제출 시 진짜 종료 처리
+  // post-check 제출 시 진짜 종료 처리
   const finalizeEndConversation = () => {
-    // 1) 마지막에 고정용 AI 종료 메시지 추가
+    // 마지막에 종료 메시지 추가
     const endId = makeId();
     setMessages((prev) => [
       ...prev,
@@ -283,13 +285,13 @@ export default function App() {
     ]);
     setCurrentTypingId(endId);
 
-    // 2) 상태 정리
+    // 상태 정리
     setStarted(false);
     setConsentState("ended");
     setStarting(false);
     setSessionId(null);
 
-    // 3) 종료대기 해제
+    // 종료대기 해제
     setPendingEnd(false);
   };
 
@@ -297,7 +299,7 @@ export default function App() {
   // 3. 동의/거절 버튼
   // =========================
   const handleConsent = async (consent) => {
-    // [CHANGED] 종료 대기 중이면 동의/거절 못 누르게
+    // 종료 대기 중이면 동의/거절 못 누르게
     if (pendingEnd) {
       alert("종료 절차 진행 중입니다. 상태 체크 제출을 완료해 주세요.");
       return;
@@ -311,12 +313,14 @@ export default function App() {
       alert("세션이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
+
     setConsentState(consent);
 
     const typingId = makeId();
     const placeholderText =
       consent === "accepted" ? "생체신호 분석 중..." : "진행 중...";
-    // 우선 placeholder 하나 박아두기
+
+    // placeholder 추가
     setMessages((prev) => [
       ...prev,
       { id: typingId, role: "ai", text: placeholderText, isTyping: true },
@@ -329,6 +333,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: "",
+          // [FIX] 항상 같이 보내기
           dept,
           rank,
           shift_type: shiftType,
@@ -337,12 +342,25 @@ export default function App() {
           session_id: sessionId,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
-      const data = await res.json();
+
+      // [FIX] body 1번만 읽기
+      const raw = await res.text();
+      console.log("[CONSENT] status:", res.status);
+      console.log("[CONSENT] raw:", raw);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${raw}`);
+      }
+
+      let data = null;
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        throw new Error("CONSENT 응답이 JSON이 아닙니다.");
+      }
 
       if (data.session_id) setSessionId(data.session_id);
-      //if (data.consent_state) setConsentState(data.consent_state);
-      
+
       const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
@@ -350,7 +368,7 @@ export default function App() {
         : [];
       const plotPath = data.plot_path || null;
 
-      // 여기서 "이미지 → 텍스트" 순서를 한 번에 보장
+      // "이미지 → 텍스트" 순서 보장
       setMessages((prev) => {
         let next = [...prev];
 
@@ -392,7 +410,7 @@ export default function App() {
           m.id === typingId
             ? {
                 ...m,
-                text: "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                text: `서버 통신 오류(CONSENT): ${String(e?.message || e)}`,
                 isTyping: false,
               }
             : m
@@ -410,7 +428,7 @@ export default function App() {
       alert("전화번호를 먼저 입력해 주세요.");
       return;
     }
-    // [ADD] 종료 대기 중이면 입력 금지
+    // 종료 대기 중이면 입력 금지
     if (pendingEnd) {
       alert("종료 절차 진행 중입니다. 상태 체크 제출을 완료해 주세요.");
       return;
@@ -423,7 +441,7 @@ export default function App() {
       alert("먼저 생체신호 분석 동의 또는 거절을 선택해 주세요.");
       return;
     }
-    
+
     // 세션ID 없으면 방지
     if (!sessionId) {
       alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
@@ -443,6 +461,7 @@ export default function App() {
       text: "답변 생성 중...",
       isTyping: true,
     };
+
     setMessages((prev) => [...prev, userMsg, aiTypingMsg]);
     setCurrentTypingId(typingId);
 
@@ -452,6 +471,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: message,
+          // [FIX] 항상 같이 보내기
           dept,
           rank,
           shift_type: shiftType,
@@ -459,14 +479,17 @@ export default function App() {
           session_id: sessionId,
         }),
       });
+
       if (!res.ok) {
-      const t = await res.text();
-      console.error("API ERROR", res.status, t);
-      throw new Error(`HTTP ${res.status} ${t}`);
-    }
+        const t = await res.text();
+        console.error("API ERROR", res.status, t);
+        throw new Error(`HTTP ${res.status} ${t}`);
+      }
+
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
+
       const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
@@ -515,7 +538,7 @@ export default function App() {
           m.id === typingId
             ? {
                 ...m,
-                text: "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                text: `서버 통신 오류(CHAT): ${String(e?.message || e)}`,
                 isTyping: false,
               }
             : m
@@ -545,9 +568,8 @@ export default function App() {
     <div className="app">
       <PrecheckModal
         open={showPrecheck && !showPhoneModal}
-        phase={precheckPhase} // [ADD]
+        phase={precheckPhase}
         onClose={() => {
-          // 실험에서 강제하려면 이 줄을 막아도 됨
           if (!precheckData) return;
           setShowPrecheck(false);
         }}
@@ -555,13 +577,13 @@ export default function App() {
           setPrecheckData(payload);
           setShowPrecheck(false);
 
-          // [ADD] post 제출이면 여기서 "완전 종료" 확정
+          // post 제출이면 "완전 종료" 확정
           if (precheckPhase === "post" && pendingEnd) {
             finalizeEndConversation();
             return;
           }
 
-          // pre 제출이면 그냥 시작 준비 완료
+          // pre 제출이면 시작 준비 완료
           console.log("precheck:", payload);
         }}
       />
@@ -642,7 +664,11 @@ export default function App() {
         <div className="chat-header">
           <h1>경찰관 전용 AI 챗봇</h1>
           <div className="logo-group">
-            <img src="/images/police.PNG" alt="경찰청 로고" className="chat-logo" />
+            <img
+              src="/images/police.PNG"
+              alt="경찰청 로고"
+              className="chat-logo"
+            />
             <img src="/images/kist.PNG" alt="키스트 로고" className="chat-logo" />
           </div>
         </div>
@@ -658,7 +684,7 @@ export default function App() {
               localStorage.setItem("dept", v);
             }}
             className="message-input dept-input"
-            disabled={started || pendingEnd} // [CHANGED]
+            disabled={started || pendingEnd}
           />
           <input
             placeholder="계급 (예: 순경, 경위)"
@@ -669,13 +695,13 @@ export default function App() {
               localStorage.setItem("rank", v);
             }}
             className="message-input rank-input"
-            disabled={started || pendingEnd} // [CHANGED]
+            disabled={started || pendingEnd}
           />
           <select
             value={shiftType}
             onChange={(e) => setShiftType(e.target.value)}
             className="message-input shift-input"
-            disabled={started || pendingEnd} // [CHANGED]
+            disabled={started || pendingEnd}
             aria-label="근무타입"
             title="근무타입"
           >
@@ -687,7 +713,7 @@ export default function App() {
             <button
               className="send-button start-button"
               onClick={handleStart}
-              disabled={starting || !dept || !rank || !userId || !canChat} // [CHANGED]
+              disabled={starting || !dept || !rank || !userId || !canChat}
             >
               대화 시작
             </button>
@@ -695,7 +721,7 @@ export default function App() {
             <button
               className="send-button end-button start-button"
               onClick={handleEndConversation}
-              disabled={pendingEnd} // [ADD]
+              disabled={pendingEnd}
             >
               대화 종료
             </button>
@@ -710,12 +736,18 @@ export default function App() {
           onInlineDecline={() => handleConsent("declined")}
           consentState={consentState}
           pendingEnd={pendingEnd}
-          sessionId={sessionId} 
+          sessionId={sessionId}
         />
 
         <MessageForm
           onSendMessage={handleSendMessage}
-          disabled={!started || consentState === "unknown" || !userId || pendingEnd || !sessionId}
+          disabled={
+            !started ||
+            consentState === "unknown" ||
+            !userId ||
+            pendingEnd ||
+            !sessionId
+          }
         />
       </div>
     </div>
@@ -730,24 +762,25 @@ function MessageList({
   onInlineDecline,
   consentState,
   pendingEnd,
-  sessionId
+  sessionId,
 }) {
   const bottomRef = useRef(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentTypingId]);
 
-  // 가장 마지막 consent_prompt 위치 찾기
-  const consentIdx = [...messages]
-    .map((m, i) => (m.type === "consent_prompt" ? i : -1))
-    .filter((i) => i >= 0)
-    .pop();
+  // [FIX] undefined 대신 -1
+  const consentIdx = messages.findLastIndex((m) => m.type === "consent_prompt");
 
-    console.log(
-    "consentIdx", consentIdx,
-    "consentState", consentState,
-    "pendingEnd", pendingEnd,
-    "lastMsg", messages[messages.length - 1]
+  console.log(
+    "consentIdx",
+    consentIdx,
+    "consentState",
+    consentState,
+    "pendingEnd",
+    pendingEnd,
+    "lastMsg",
+    messages[messages.length - 1]
   );
 
   return (
@@ -770,8 +803,8 @@ function MessageList({
             />
           )}
 
-          {/* 동의 버튼 표시 (해당 세션 시작 시점에만) */}
-          {i === consentIdx && consentState === "unknown" && !pendingEnd && (
+          {/* 동의 버튼 표시 */}
+          {i === consentIdx && consentIdx !== -1 && consentState === "unknown" && !pendingEnd && (
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
