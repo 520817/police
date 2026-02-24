@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import PrecheckModal from "./vas_sam";
 
-// const apiOrigin = "http://localhost:8000"; // 백엔드 origin
+//const apiOrigin = "http://localhost:8000"; // 백엔드 origin
 const apiOrigin = "https://police-pwfu.onrender.com";
 
 function makeId() {
@@ -185,11 +185,7 @@ export default function App() {
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
-      if (data.session_id) {
-          setSessionId(data.session_id);
-      else {
-          throw new Error("서버가 session_id를 반환하지 않았습니다.");
-      }
+      if (data.consent_state) setConsentState(data.consent_state);
 
       // 대화 시작 플래그 on
       setStarted(true);
@@ -305,8 +301,8 @@ export default function App() {
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
-      //if (data.consent_state) setConsentState(data.consent_state);
-      
+      if (data.consent_state) setConsentState(data.consent_state);
+
       const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
@@ -671,7 +667,7 @@ export default function App() {
 
         <MessageForm
           onSendMessage={handleSendMessage}
-          disabled={!started || consentState === "unknown" || !userId || pendingEnd || !sessionId}
+          disabled={!started || consentState === "unknown" || !userId || pendingEnd} // [CHANGED]
         />
       </div>
     </div>
@@ -723,7 +719,7 @@ function MessageList({
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
-              disabled={Boolean(currentTypingId) || !sessionId}
+              disabled={Boolean(currentTypingId)}
             />
           )}
         </React.Fragment>
