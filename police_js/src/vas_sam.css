@@ -33,16 +33,6 @@
   background: #fafafa;
   border: 1px solid #eee;
 }
-@media (max-width: 480px){
-  .precheckModal{
-    width: 100vw;
-    max-width: 100vw;
-    height: 100vh;
-    max-height: 100vh;
-    border-radius: 0;
-    padding: 14px;
-  }
-}
 .sam__card {
   cursor: pointer;
   background: transparent;
@@ -57,22 +47,29 @@
   display: block;
 }
 
-/* ---------- Modal ---------- */
+/* ---------- Modal Overlay ---------- */
 .precheckOverlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
   width: 100vw;
   height: 100vh;
+
   background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
-  align-items: flex-start;    /* ✅ center 금지 */
+  align-items: flex-start;
   padding: 16px;
+
   z-index: 99999;
   box-sizing: border-box;
   isolation: isolate;
 }
 
+/* ---------- Modal Box ---------- */
 .precheckModal {
   width: 600px;
   max-width: 96vw;
@@ -103,7 +100,6 @@
   margin-top: 8px;
   color: #555;
 }
-
 .precheckCloseBtn {
   border: 1px solid #ddd;
   background: #fff;
@@ -125,64 +121,31 @@
   line-height: 1.3;
 }
 
-@media (max-width: 480px){
-  .vasLabel{
-    font-size: 12.5px;
-    line-height: 1.25;
-  }
-}
-
 .vasInlineRow {
   display: flex;
-  gap: 14px;
   align-items: center;
+  gap: 12px;
   flex-wrap: nowrap;
 }
+
 .vasSlider {
-  width: 1 1 auto;
+  flex: 1;
   min-width: 0;
   width: auto;
 }
+
 .vasValue {
-  flex: 0 0 56px;     
+  flex: 0 0 56px;
   white-space: nowrap;
 }
-@media (max-width: 480px){
-  .vasValue{ flex-basis: 44px; font-size: 16px; }
-}
+
 .vasHelp {
   margin-top: 6px;
   font-size: 12px;
   color: #999;
 }
 
-.vasInlineRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.vasSlider {
-  flex: 1;        /* 남는 공간 다 차지 */
-  min-width: 0;   /* 줄어들 수 있게 */
-}
-
-.vasInlineValue {
-  width: 52px;
-  text-align: right;
-  font-weight: 900;
-  font-size: 18px;
-  white-space: nowrap;
-}
-
-@media (max-width: 480px){
-  .vasInlineValue {
-    width: 40px;
-    font-size: 16px;
-  }
-}
-
-/* ---------- Grid (Valence / Arousal) ---------- */
+/* ---------- Grid ---------- */
 .samGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -235,21 +198,26 @@
   font-weight: 500;
 }
 
-/* ---- axis를 stage 기준으로 배치 ---- */
+/* ---------- Axis Layout ---------- */
+/* PC 기준 axis 폭 */
+:root {
+  --axisY: 82px;
+}
+
+/* stage 기준으로 축 배치 */
 .sam__wrap {
   position: relative;
   width: fit-content;
   margin: 0 auto;
-
-  padding-left: 82px; 
+  padding-left: var(--axisY);
 }
 
-/* axisY를 왼쪽에 절대배치 */
+/* Y축 */
 .sam__axisY {
   position: absolute;
-  left: 0;            /* ✅ 음수 금지 */
+  left: 0;
   top: 0;
-  width: 82px;
+  width: var(--axisY);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -259,26 +227,22 @@
   line-height: 1.2;
   user-select: none;
   pointer-events: none;
-  }
-
-/* stage를 wrap padding 이후 영역에 자연스럽게 놓기 */
-.sam__stage{
-  margin: 0;          /* 기존 0 auto였으면 0으로 */
-}
-@media (max-width: 480px){
-  .sam__wrap{ padding-left: 62px; }
-  .sam__axisY{ width: 62px; font-size: 11px; }
 }
 
 .sam__axisYMid {
-    writing-mode: horizontal-tb;
-    transform: none;
+  writing-mode: horizontal-tb;
+  transform: none;
 }
 
-/* 가로축(Valence) */
-.sam__axisX{
+/* stage는 wrap padding 뒤 영역에 놓임 */
+.sam__stage {
+  margin: 0;
+}
+
+/* ✅ X축(Valence) — 글자 줄만 오른쪽으로 */
+.sam__axisX {
   margin-top: 10px;
-  margin-left: 82px; 
+  margin-left: var(--axisY);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -288,15 +252,27 @@
   user-select: none;
   pointer-events: none;
 }
-@media (max-width: 480px){
-  .sam__axisX{ margin-left: 62px; }
+.sam__axisXLeft {
+  flex: 1;
+  text-align: left;
 }
-.sam__axisXLeft{ flex: 1; text-align: left; }
-.sam__axisXRight{ flex: 1; text-align: right; }
-.sam__axisXLine{ flex: 0 0 auto; text-align: center; font-weight: 500; opacity: 0.85; }
+.sam__axisXRight {
+  flex: 1;
+  text-align: right;
+}
+.sam__axisXLine {
+  flex: 0 0 auto;
+  text-align: center;
+  font-weight: 500;
+  opacity: 0.85;
+}
 
-/* ✅ 모바일에서 축이 밖으로 튀어나가서 가로스크롤 생기는 것 방지 */
+/* ---------- Mobile ---------- */
 @media (max-width: 480px) {
+  :root {
+    --axisY: 62px;
+  }
+
   .precheckModal {
     width: 100vw;
     max-width: 100vw;
@@ -306,70 +282,28 @@
     padding: 14px;
   }
 
+  .vasLabel {
+    font-size: 12.5px;
+    line-height: 1.25;
+  }
+
+  .vasValue {
+    flex-basis: 44px;
+    font-size: 16px;
+  }
+
   .sam__intro {
     margin-bottom: 10px;
     font-size: 13px;
   }
 
-  /* 세로축이 너무 바깥으로 나가면 화면 폭을 잡아먹음 */
   .sam__axisY {
-  position: static;     /* ✅ absolute 제거 */
-  width: 66px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  opacity: 0.55;
-  font-size: 12px;
-  line-height: 1.2;
-  user-select: none;
-  pointer-events: none;
-  }
-  @media (max-width: 480px){
-  .sam__axisY{
-    width: 56px;
     font-size: 11px;
   }
-}
 
-  /* stage 아래 간격 줄이기 */
   .sam__axisX {
     margin-top: 6px;
     font-size: 11px;
     gap: 6px;
   }
-
-  /* VAS 줄도 타이트하게 */
-  .vasRow {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: nowrap;  
-  }
-.vasSlider{
-    flex: 1 1 auto;
-    min-width: 0;
-    width: auto;           /* ✅ 420px 고정 제거 */
 }
-
-.vasValue{
-    flex: 0 0 56px;
-    white-space: nowrap;
-}
-@media (max-width: 480px){
-    .vasValue{ flex-basis: 44px; font-size: 16px; }
-  }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
