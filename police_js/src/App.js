@@ -184,12 +184,11 @@ export default function App() {
       if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
       const data = await res.json();
 
-      if (data.session_id) setSessionId(data.session_id);
-      if (data.session_id) {
+     if (data.session_id) {
           setSessionId(data.session_id);
-      else {
+     } else {
           throw new Error("서버가 session_id를 반환하지 않았습니다.");
-      }
+        }
 
       // 대화 시작 플래그 on
       setStarted(true);
@@ -199,13 +198,12 @@ export default function App() {
         id: makeId(),
         role: "ai",
         type: "consent_prompt",
-        isTyping: true,
+        isTyping: false,
         text:
           "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
       };
 
       setMessages((prev) => [...prev, consentAiMsg]);
-      setCurrentTypingId(consentAiMsg.id);
     } catch (e) {
       console.error(e);
       const errId = makeId();
@@ -305,8 +303,8 @@ export default function App() {
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
-      if (data.consent_state) setConsentState(data.consent_state);
-
+      //if (data.consent_state) setConsentState(data.consent_state);
+      
       const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
@@ -723,7 +721,7 @@ function MessageList({
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
-              disabled={Boolean(currentTypingId) || !sessionId}
+              disabled={!sessionId}
             />
           )}
         </React.Fragment>
