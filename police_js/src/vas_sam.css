@@ -276,7 +276,7 @@
 /* 가로축(Valence) */
 .sam__axisX{
   margin-top: 10px;
-  margin-left: 18px; 
+  margin-left: 25px; 
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -357,6 +357,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
