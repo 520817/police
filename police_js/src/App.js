@@ -58,7 +58,7 @@ function ImageMessageBubble({ src }) {
 
 export default function App() {
   const [showPrecheck, setShowPrecheck] = useState(false); // precheck 모달 표시 여부
-  const [precheckData, setPrecheckData] = useState(null); // precheck 결과 저장(원하면 활용)
+  const [precheckData, setPrecheckData] = useState(null); // pre/post 결과 저장
 
   const [messages, setMessages] = useState([]);
   const [currentTypingId, setCurrentTypingId] = useState(null);
@@ -78,8 +78,14 @@ export default function App() {
   // 전화번호 기반 user_id 관리
   const [userId, setUserId] = useState(null);
 
-  const canChat = Boolean(precheckData); // precheck 결과 있으면 시작 허용
-  
+  // [ADD] pre/post 체크 단계
+  const [precheckPhase, setPrecheckPhase] = useState("pre"); // "pre" | "post"
+  // [ADD] 종료 확정 대기 (post 제출하면 진짜 종료)
+  const [pendingEnd, setPendingEnd] = useState(false);
+
+  // precheck 결과 있으면 시작 허용
+  const canChat = Boolean(precheckData);
+
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -93,20 +99,20 @@ export default function App() {
     const storedUserId = localStorage.getItem("user_id");
     if (storedUserId) {
       setUserId(storedUserId);
+      // [CHANGED] 첫 진입은 pre 체크부터
+      setPrecheckPhase("pre");
+      setPendingEnd(false);
+      setPrecheckData(null);
       setShowPrecheck(true);
     } else {
       setShowPhoneModal(true); // 저장된 ID 없으면 모달 띄우기
     }
 
     const storedDept = localStorage.getItem("dept");
-    if (storedDept) {
-      setDept(storedDept);
-    }
+    if (storedDept) setDept(storedDept);
 
     const storedRank = localStorage.getItem("rank");
-    if (storedRank) {
-      setRank(storedRank);
-    }
+    if (storedRank) setRank(storedRank);
   }, []);
 
   // 전화번호 제출
@@ -126,6 +132,10 @@ export default function App() {
     localStorage.setItem("user_id", trimmed);
     setUserId(trimmed);
 
+    // [CHANGED] 전화번호 입력 후에도 pre 체크부터
+    setPrecheckPhase("pre");
+    setPendingEnd(false);
+    setPrecheckData(null);
     setShowPrecheck(true);
   };
 
@@ -141,7 +151,16 @@ export default function App() {
       alert("부서와 계급을 입력해 주세요.");
       return;
     }
+    // [ADD] precheck 완료 전엔 시작 금지
+    if (!canChat) {
+      alert("대화 전 상태 체크를 먼저 완료해 주세요.");
+      return;
+    }
     if (starting) return;
+
+    // [ADD] 시작 시엔 종료대기 상태 해제
+    setPrecheckPhase("pre");
+    setPendingEnd(false);
 
     // 새 대화 시작이니까 동의 상태 리셋
     setConsentState("unknown");
@@ -201,10 +220,22 @@ export default function App() {
   };
 
   // =========================
-  // 2. 대화 종료
+  // 2. 대화 종료 (버튼 클릭: 바로 종료 X → post 모달 띄움)
   // =========================
   const handleEndConversation = () => {
-    // 1) 마지막에 고정용 AI 종료 메시지 추가 (기록은 남김)
+    if (!started) return;
+
+    // [CHANGED] 종료 버튼 누르면 "post 체크" 모달부터 띄우고, 제출 시 진짜 종료되게 함
+    setPrecheckPhase("post");
+    setPendingEnd(true);
+
+    setPrecheckData(null); // post도 새로 측정 강제
+    setShowPrecheck(true); // 모달 열기
+  };
+
+  // [ADD] post-check 제출 시 진짜 종료 처리
+  const finalizeEndConversation = () => {
+    // 1) 마지막에 고정용 AI 종료 메시지 추가
     const endId = makeId();
     setMessages((prev) => [
       ...prev,
@@ -212,29 +243,38 @@ export default function App() {
         id: endId,
         role: "ai",
         text:
-          "오늘 대화는 여기에서 마무리하겠습니다.\n\n조금이라도 도움이 되셨다면 좋겠습니다.\n " +
+          "오늘 대화는 여기에서 마무리하겠습니다.\n\n조금이라도 도움이 되셨다면 좋겠습니다.\n" +
           "나중에 또 필요하실 때 언제든지 편하게 다시 찾아와 주세요!",
         isTyping: false,
       },
     ]);
-
     setCurrentTypingId(endId);
-    // 2) 상태 정리 (이전 기록은 그대로 둠)
+
+    // 2) 상태 정리
     setStarted(false);
     setConsentState("ended");
     setStarting(false);
-
     setSessionId(null);
 
-    // [CHANGED] 종료 시점에 다시 precheck 창 띄우기
-    setPrecheckData(null);      // 다시 측정 강제
-    setShowPrecheck(true);      // 모달 다시 열기
+    // 3) 종료대기 해제
+    setPendingEnd(false);
+
+    // 4) (선택) 다음 회차를 위해 pre 체크를 다시 강제하고 싶으면 아래 3줄 유지
+    //    - 지금은 "완전 종료"만 하고, 다음 대화는 사용자가 '대화 시작' 누르기 전에 다시 pre 체크 띄우는 흐름으로도 OK
+    setPrecheckPhase("pre");
+    setPrecheckData(null);
+    setShowPrecheck(true);
   };
 
   // =========================
   // 3. 동의/거절 버튼
   // =========================
   const handleConsent = async (consent) => {
+    // [CHANGED] 종료 대기 중이면 동의/거절 못 누르게
+    if (pendingEnd) {
+      alert("종료 절차 진행 중입니다. 상태 체크 제출을 완료해 주세요.");
+      return;
+    }
     if (!started) {
       alert("먼저 대화를 시작해 주세요.");
       return;
@@ -335,6 +375,11 @@ export default function App() {
       alert("전화번호를 먼저 입력해 주세요.");
       return;
     }
+    // [ADD] 종료 대기 중이면 입력 금지
+    if (pendingEnd) {
+      alert("종료 절차 진행 중입니다. 상태 체크 제출을 완료해 주세요.");
+      return;
+    }
     if (!started) {
       alert("먼저 대화를 시작해 주세요.");
       return;
@@ -344,7 +389,7 @@ export default function App() {
       return;
     }
 
-    // [ADDED] 세션ID 없으면 방지
+    // 세션ID 없으면 방지
     if (!sessionId) {
       alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
       return;
@@ -458,18 +503,26 @@ export default function App() {
     <div className="app">
       <PrecheckModal
         open={showPrecheck && !showPhoneModal}
+        phase={precheckPhase} // [ADD]
         onClose={() => {
           // 실험에서 강제하려면 이 줄을 막아도 됨
           if (!precheckData) return;
           setShowPrecheck(false);
         }}
         onDone={(payload) => {
-          setPrecheckData(payload);      // 결과 저장
-          setShowPrecheck(false);        // 모달 닫기
+          setPrecheckData(payload);
+          setShowPrecheck(false);
+
+          // [ADD] post 제출이면 여기서 "완전 종료" 확정
+          if (precheckPhase === "post" && pendingEnd) {
+            finalizeEndConversation();
+            return;
+          }
+
+          // pre 제출이면 그냥 시작 준비 완료
           console.log("precheck:", payload);
         }}
       />
-
 
       {/* 전화번호 입력 모달 */}
       {showPhoneModal && (
@@ -560,10 +613,10 @@ export default function App() {
             onChange={(e) => {
               const v = e.target.value;
               setDept(v);
-              localStorage.setItem("dept", v); // 자동 저장
+              localStorage.setItem("dept", v);
             }}
             className="message-input dept-input"
-            disabled={started}
+            disabled={started || pendingEnd} // [CHANGED]
           />
           <input
             placeholder="계급 (예: 순경, 경위)"
@@ -571,16 +624,16 @@ export default function App() {
             onChange={(e) => {
               const v = e.target.value;
               setRank(v);
-              localStorage.setItem("rank", v); // 자동 저장
+              localStorage.setItem("rank", v);
             }}
             className="message-input rank-input"
-            disabled={started}
+            disabled={started || pendingEnd} // [CHANGED]
           />
           <select
             value={shiftType}
             onChange={(e) => setShiftType(e.target.value)}
             className="message-input shift-input"
-            disabled={started}
+            disabled={started || pendingEnd} // [CHANGED]
             aria-label="근무타입"
             title="근무타입"
           >
@@ -592,7 +645,7 @@ export default function App() {
             <button
               className="send-button start-button"
               onClick={handleStart}
-              disabled={starting || !dept || !rank || !userId}
+              disabled={starting || !dept || !rank || !userId || !canChat} // [CHANGED]
             >
               대화 시작
             </button>
@@ -600,6 +653,7 @@ export default function App() {
             <button
               className="send-button end-button start-button"
               onClick={handleEndConversation}
+              disabled={pendingEnd} // [ADD]
             >
               대화 종료
             </button>
@@ -613,11 +667,12 @@ export default function App() {
           onInlineAccept={() => handleConsent("accepted")}
           onInlineDecline={() => handleConsent("declined")}
           consentState={consentState}
+          pendingEnd={pendingEnd} // [ADD]
         />
 
         <MessageForm
           onSendMessage={handleSendMessage}
-          disabled={!started || consentState === "unknown" || !userId}
+          disabled={!started || consentState === "unknown" || !userId || pendingEnd} // [CHANGED]
         />
       </div>
     </div>
@@ -631,6 +686,7 @@ function MessageList({
   onInlineAccept,
   onInlineDecline,
   consentState,
+  pendingEnd, // [ADD]
 }) {
   const bottomRef = useRef(null);
   useEffect(() => {
@@ -664,7 +720,7 @@ function MessageList({
           )}
 
           {/* 동의 버튼 표시 (해당 세션 시작 시점에만) */}
-          {i === consentIdx && consentState === "unknown" && (
+          {i === consentIdx && consentState === "unknown" && !pendingEnd && (
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
