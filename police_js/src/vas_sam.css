@@ -243,7 +243,7 @@
 .sam__axisX {
   margin-top: 10px;
   margin-left: var(--axisY);
-  transform: translateX(86px);  
+  transform: translateX(92px);  
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -306,10 +306,11 @@
 
   .sam__axisX {
     margin-top: 6px;
-    transform: translateX(66px);
+    transform: translateX(72px);
     font-size: 11px;
     gap: 6px;
   }
 }
+
 
 
