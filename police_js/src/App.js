@@ -550,14 +550,7 @@ export default function App() {
         </div>
 
         {/* 프로필 입력 라인 */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 8,
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="profile-row">
           <input
             placeholder="부서 (예: 형사과, 교통과)"
             value={dept}
@@ -603,7 +596,7 @@ export default function App() {
             </button>
           ) : (
             <button
-              className="send-button end-button"
+              className="send-button end-button start-button"
               onClick={handleEndConversation}
             >
               대화 종료
