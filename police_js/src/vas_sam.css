@@ -28,11 +28,19 @@
   margin-bottom: 10px;
 }
 .sam__stage {
-  position: relative;
-  margin: 0 auto;
-  border-radius: 18px;
+  max-width: 100%;
   background: #fafafa;
   border: 1px solid #eee;
+}
+@media (max-width: 480px){
+  .precheckModal{
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    padding: 14px;
+  }
 }
 .sam__card {
   cursor: pointer;
@@ -106,23 +114,34 @@
 .vasLabel {
   font-weight: 800;
   margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.3;
 }
+
+@media (max-width: 480px){
+  .vasLabel{
+    font-size: 12.5px;
+    line-height: 1.25;
+  }
+}
+
 .vasRow {
   display: flex;
   gap: 14px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .vasSlider {
-  width: 420px;
-  max-width: 100%;
+  width: 1 1 auto;
+  min-width: 0;
+  width: auto;
 }
 .vasValue {
-  width: 56px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 18px;
-  font-weight: 900;
+  flex: 0 0 56px;     
+  white-space: nowrap;
+}
+@media (max-width: 480px){
+  .vasValue{ flex-basis: 44px; font-size: 16px; }
 }
 .vasHelp {
   margin-top: 6px;
@@ -190,28 +209,25 @@
   margin: 0 auto;
 }
 
+@media (max-width: 480px){
+  .sam__wrap{
+    padding-left: 0; /* 축을 왼쪽에 두지 않음 */
+  }
+
 /* axisY를 왼쪽에 절대배치 */
 .sam__axisY {
-  position: absolute;
-  left: -75px;
-  top: 0;
-  width: 82px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  opacity: 0.55;
-  font-size: 12px;
-  line-height: 1.2;
-  user-select: none;
-  pointer-events: none;
-}
+    position: static;        /* ✅ absolute 해제 */
+    width: auto;
+    height: auto !important; /* inline height 무시 */
+    flex-direction: row;     /* ✅ 가로로 */
+    justify-content: space-between;
+    margin: 0 0 8px 0;       /* stage 위에 붙이기 */
+    opacity: 0.65;
+  }
 
 .sam__axisYMid {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-weight: 400;
-  opacity: 0.85;
+    writing-mode: horizontal-tb;
+    transform: none;
 }
 
 /* 가로축(Valence) */
@@ -273,4 +289,5 @@
     font-size: 16px;
   }
 }
+
 
