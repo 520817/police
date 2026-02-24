@@ -154,6 +154,25 @@
   color: #999;
 }
 
+.vasInlineRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vasSlider {
+  flex: 1;        /* 남는 공간 다 차지 */
+  min-width: 0;   /* 줄어들 수 있게 */
+}
+
+.vasInlineValue {
+  width: 52px;
+  text-align: right;
+  font-weight: 900;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
 /* ---------- Grid (Valence / Arousal) ---------- */
 .samGrid {
   display: grid;
@@ -311,6 +330,7 @@
     font-size: 16px;
   }
 }
+
 
 
 
