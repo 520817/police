@@ -559,7 +559,7 @@ export default function App() {
               setDept(v);
               localStorage.setItem("dept", v); // 자동 저장
             }}
-            className="message-input"
+            className="message-input dept-input"
             disabled={started}
           />
           <input
