@@ -665,7 +665,7 @@ export default function App() {
           onInlineDecline={() => handleConsent("declined")}
           consentState={consentState}
           pendingEnd={pendingEnd}
-          console.log("consentIdx", consentIdx, "consentState", consentState, "pendingEnd", pendingEnd, "lastMsg", messages[messages.length-1]);
+          sessionId={sessionId} 
         />
 
         <MessageForm
@@ -684,7 +684,8 @@ function MessageList({
   onInlineAccept,
   onInlineDecline,
   consentState,
-  pendingEnd, // [ADD]
+  pendingEnd,
+  sessionId
 }) {
   const bottomRef = useRef(null);
   useEffect(() => {
@@ -696,6 +697,13 @@ function MessageList({
     .map((m, i) => (m.type === "consent_prompt" ? i : -1))
     .filter((i) => i >= 0)
     .pop();
+
+    console.log(
+    "consentIdx", consentIdx,
+    "consentState", consentState,
+    "pendingEnd", pendingEnd,
+    "lastMsg", messages[messages.length - 1]
+  );
 
   return (
     <div className="messages-list">
@@ -722,7 +730,7 @@ function MessageList({
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
-              disabled={!sessionId}
+              disabled={Boolean(currentTypingId) || !sessionId}
             />
           )}
         </React.Fragment>
