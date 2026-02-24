@@ -540,7 +540,10 @@ export default function App() {
         </div>
       )}
 
-      <div className="chat-box">
+      <div
+        className={`chat-box ${showPrecheck ? "chat-box--hidden" : ""}`}
+        aria-hidden={showPrecheck}
+      >
         <div className="chat-header">
           <h1>경찰관 전용 AI 챗봇</h1>
           <div className="logo-group">
