@@ -271,3 +271,8 @@ body {
 
   .user-message, .ai-message { font-size: 15px; max-width: 92%; }
 }
+
+.chat-box--hidden {
+  visibility: hidden;     /* 완전히 안 보이게 */
+  pointer-events: none;   /* 클릭/터치도 차단 */
+}
