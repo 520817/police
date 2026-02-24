@@ -276,6 +276,7 @@
 /* 가로축(Valence) */
 .sam__axisX{
   margin-top: 10px;
+  margin-left: 18px; 
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -284,8 +285,9 @@
   font-size: 12px;
   user-select: none;
   pointer-events: none;
-
-  transform: translateX(20px); 
+}
+@media (max-width: 480px){
+  .sam__axisX{ margin-left: 12px; }
 }
 .sam__axisXLeft{ flex: 1; text-align: left; }
 .sam__axisXRight{ flex: 1; text-align: right; }
@@ -355,6 +357,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
