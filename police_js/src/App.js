@@ -184,11 +184,12 @@ export default function App() {
       if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
       const data = await res.json();
 
-     if (data.session_id) {
+      if (data.session_id) setSessionId(data.session_id);
+      if (data.session_id) {
           setSessionId(data.session_id);
-     } else {
+      else {
           throw new Error("서버가 session_id를 반환하지 않았습니다.");
-        }
+      }
 
       // 대화 시작 플래그 on
       setStarted(true);
@@ -198,12 +199,13 @@ export default function App() {
         id: makeId(),
         role: "ai",
         type: "consent_prompt",
-        isTyping: false,
+        isTyping: true,
         text:
           "오늘 수집된 생체신호를 참고해서 함께 살펴볼까요?\n\n분석에 동의하시면 ‘동의’를, 원치 않으시면 ‘거절’을 눌러 주세요.",
       };
 
       setMessages((prev) => [...prev, consentAiMsg]);
+      setCurrentTypingId(consentAiMsg.id);
     } catch (e) {
       console.error(e);
       const errId = makeId();
@@ -664,8 +666,7 @@ export default function App() {
           onInlineAccept={() => handleConsent("accepted")}
           onInlineDecline={() => handleConsent("declined")}
           consentState={consentState}
-          pendingEnd={pendingEnd}
-          sessionId={sessionId} 
+          pendingEnd={pendingEnd} // [ADD]
         />
 
         <MessageForm
@@ -684,8 +685,7 @@ function MessageList({
   onInlineAccept,
   onInlineDecline,
   consentState,
-  pendingEnd,
-  sessionId
+  pendingEnd, // [ADD]
 }) {
   const bottomRef = useRef(null);
   useEffect(() => {
@@ -697,13 +697,6 @@ function MessageList({
     .map((m, i) => (m.type === "consent_prompt" ? i : -1))
     .filter((i) => i >= 0)
     .pop();
-
-    console.log(
-    "consentIdx", consentIdx,
-    "consentState", consentState,
-    "pendingEnd", pendingEnd,
-    "lastMsg", messages[messages.length - 1]
-  );
 
   return (
     <div className="messages-list">
