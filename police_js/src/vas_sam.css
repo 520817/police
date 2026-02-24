@@ -3,8 +3,8 @@
 /* ---------- CheckDot ---------- */
 .checkdot {
   margin-top: 6px;
-  margin-left: auto;   
-  margin-right: auto; 
+  margin-left: auto;
+  margin-right: auto;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -22,7 +22,6 @@
 /* ---------- SAM Circle ---------- */
 .sam {
   margin-top: 12px;
-  
 }
 .sam__title {
   font-weight: 800;
@@ -37,13 +36,8 @@
 }
 .sam__card {
   cursor: pointer;
-  /*background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 16px;
-  padding: 7px;*/
   background: transparent;
   border: none;
- 
   text-align: center;
 }
 .sam__card--active {
@@ -53,7 +47,6 @@
 .sam__img {
   display: block;
 }
-
 
 /* ---------- Modal ---------- */
 .precheckOverlay {
@@ -72,6 +65,7 @@
   max-width: 96vw;
   max-height: 92vh;
   overflow: auto;
+  overflow-x: hidden; /* ✅ 가로 스크롤 방지 */
   background: #fff;
   border-radius: 18px;
   border: 1px solid #eee;
@@ -118,7 +112,6 @@
   gap: 14px;
   align-items: center;
   flex-wrap: wrap;
-  
 }
 .vasSlider {
   width: 420px;
@@ -182,7 +175,6 @@
   font-weight: 800;
 }
 
-
 .sam__intro {
   text-align: center;
   font-size: 14px;
@@ -191,17 +183,17 @@
   font-weight: 500;
 }
 
-/* ---- axis를 stage 기준으로 배치 (stage가 중앙에 오게) ---- */
-.sam__wrap{
+/* ---- axis를 stage 기준으로 배치 ---- */
+.sam__wrap {
   position: relative;
   width: fit-content;
-  margin: 0 auto;          /* stage 덩어리 자체를 가운데 */
+  margin: 0 auto;
 }
 
 /* axisY를 왼쪽에 절대배치 */
-.sam__axisY{
+.sam__axisY {
   position: absolute;
-  left: -75px;             /* 축이 stage에서 얼마나 떨어질지 */
+  left: -75px;
   top: 0;
   width: 82px;
   display: flex;
@@ -224,7 +216,7 @@
 
 /* 가로축(Valence) */
 .sam__axisX {
-  margin-top: 10px;         /* stage와 너무 떨어지면 6~8로 */
+  margin-top: 10px;
   white-space: pre;
   display: flex;
   align-items: center;
@@ -242,3 +234,14 @@
   opacity: 0.85;
 }
 
+/* ✅ 모바일에서 축이 밖으로 튀어나가서 가로스크롤 생기는 것 방지 */
+@media (max-width: 480px) {
+  .sam__axisY {
+    left: -42px;
+    width: 52px;
+    font-size: 11px;
+  }
+  .sam__axisX {
+    font-size: 11px;
+  }
+}
