@@ -1,6 +1,8 @@
 // src/vas_sam.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import "./vas_sam.css";
+
+
 
 /* ---------------------------
  * CheckDot
@@ -133,17 +135,15 @@ function PrecheckModalInner({
   initialSam = null,
 }) {
   // ✅ Hooks must not be conditional
-  import React, { useMemo, useState, useEffect } from "react"; 
 
-  function PrecheckModalInner(...) {
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
     };
   }, []);
-    
+  
   const [vas, setVas] = useState(initialVas);
   const [vasTouched, setVasTouched] = useState(false);
 
