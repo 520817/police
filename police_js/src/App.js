@@ -185,7 +185,11 @@ export default function App() {
       const data = await res.json();
 
       if (data.session_id) setSessionId(data.session_id);
-      if (data.consent_state) setConsentState(data.consent_state);
+      if (data.session_id) {
+          setSessionId(data.session_id);
+      else {
+          throw new Error("서버가 session_id를 반환하지 않았습니다.");
+      }
 
       // 대화 시작 플래그 on
       setStarted(true);
@@ -667,7 +671,7 @@ export default function App() {
 
         <MessageForm
           onSendMessage={handleSendMessage}
-          disabled={!started || consentState === "unknown" || !userId || pendingEnd} // [CHANGED]
+          disabled={!started || consentState === "unknown" || !userId || pendingEnd || !sessionId}
         />
       </div>
     </div>
@@ -719,7 +723,7 @@ function MessageList({
             <InlineConsent
               onAccept={onInlineAccept}
               onDecline={onInlineDecline}
-              disabled={Boolean(currentTypingId)}
+              disabled={Boolean(currentTypingId) || !sessionId}
             />
           )}
         </React.Fragment>
