@@ -588,7 +588,7 @@ export default function App() {
 
           {!started ? (
             <button
-              className="send-button"
+              className="send-button start-button"
               onClick={handleStart}
               disabled={starting || !dept || !rank || !userId}
             >
