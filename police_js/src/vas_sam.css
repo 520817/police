@@ -130,7 +130,7 @@
   }
 }
 
-.vasRow {
+.vasInlineRow {
   display: flex;
   gap: 14px;
   align-items: center;
@@ -357,6 +357,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
