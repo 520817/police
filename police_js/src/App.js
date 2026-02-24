@@ -1,11 +1,9 @@
 // src/App.js
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import PrecheckModal from "./vas_sam";
 
-const apiOrigin =
-  process.env.NODE_ENV === "production"
-    ? "https://police-pwfu.onrender.com"   // FastAPI 배포된 주소
-    : "http://localhost:8000";             // 로컬 개발용
+const apiOrigin = "http://localhost:8000"; // 백엔드 origin
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -34,7 +32,7 @@ function Typewriter({ text, speed = 30, onDone, onStep }) {
   return <span>{out}</span>;
 }
 
-// 이미지 메시지 (생체신호 그래프)
+// 이미지 말풍선 (생체신호 플롯)
 function ImageMessageBubble({ src }) {
   if (!src) return null;
   return (
@@ -59,39 +57,62 @@ function ImageMessageBubble({ src }) {
 }
 
 export default function App() {
+  const [showPrecheck, setShowPrecheck] = useState(false); // precheck 모달 표시 여부
+  const [precheckData, setPrecheckData] = useState(null); // precheck 결과 저장(원하면 활용)
+
   const [messages, setMessages] = useState([]);
   const [currentTypingId, setCurrentTypingId] = useState(null);
 
+  // sessionId 제거 → 대화 시작 여부만 관리
   const [started, setStarted] = useState(false);
+
   const [dept, setDept] = useState("");
   const [rank, setRank] = useState("");
   const [shiftType, setShiftType] = useState("day");
   const [starting, setStarting] = useState(false);
 
+  // 생체신호 동의 상태
+  // "unknown" | "accepted" | "declined" | "ended"
   const [consentState, setConsentState] = useState("unknown");
 
+  // 전화번호 기반 user_id 관리
   const [userId, setUserId] = useState(null);
+
+  const canChat = Boolean(precheckData); // precheck 결과 있으면 시작 허용
+  
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneError, setPhoneError] = useState("");
 
   const API_URL = `${apiOrigin}/chat`;
 
+  const [sessionId, setSessionId] = useState(null);
+
+  // 처음 들어왔을 때 localStorage에서 user_id / dept / rank 복원
   useEffect(() => {
     const storedUserId = localStorage.getItem("user_id");
-    if (storedUserId) setUserId(storedUserId);
-    else setShowPhoneModal(true);
+    if (storedUserId) {
+      setUserId(storedUserId);
+      setShowPrecheck(true);
+    } else {
+      setShowPhoneModal(true); // 저장된 ID 없으면 모달 띄우기
+    }
 
     const storedDept = localStorage.getItem("dept");
-    if (storedDept) setDept(storedDept);
+    if (storedDept) {
+      setDept(storedDept);
+    }
 
     const storedRank = localStorage.getItem("rank");
-    if (storedRank) setRank(storedRank);
+    if (storedRank) {
+      setRank(storedRank);
+    }
   }, []);
 
+  // 전화번호 제출
   const handlePhoneSubmit = () => {
     const trimmed = phoneInput.trim();
-    const regex = /^01[0-9]{9}$/;
+    const regex = /^01[0-9]{9}$/; // 010 포함 11자리
 
     if (!regex.test(trimmed)) {
       setPhoneError("올바른 11자리 번호를 입력해 주세요. (예: 01012345678)");
@@ -100,17 +121,31 @@ export default function App() {
 
     setPhoneError("");
     setShowPhoneModal(false);
+
+    // 여기서는 전화번호를 그대로 user_id로 사용
     localStorage.setItem("user_id", trimmed);
     setUserId(trimmed);
+
+    setShowPrecheck(true);
   };
 
-  // 대화 시작
+  // =========================
+  // 1. 대화 시작
+  // =========================
   const handleStart = async () => {
-    if (!userId) return alert("전화번호를 먼저 입력해 주세요.");
-    if (!dept.trim() || !rank.trim()) return alert("부서와 계급을 입력해 주세요.");
+    if (!userId) {
+      alert("전화번호를 먼저 입력해 주세요.");
+      return;
+    }
+    if (!dept.trim() || !rank.trim()) {
+      alert("부서와 계급을 입력해 주세요.");
+      return;
+    }
     if (starting) return;
 
+    // 새 대화 시작이니까 동의 상태 리셋
     setConsentState("unknown");
+    setSessionId(null);
     setStarting(true);
 
     try {
@@ -123,12 +158,19 @@ export default function App() {
           rank,
           shift_type: shiftType,
           user_id: userId,
+          session_id: "",
         }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
       const data = await res.json();
 
+      if (data.session_id) setSessionId(data.session_id);
+      if (data.consent_state) setConsentState(data.consent_state);
+
+      // 대화 시작 플래그 on
       setStarted(true);
 
+      // 새 세션용 동의 요청 메시지를 기존 기록 아래에 붙이기
       const consentAiMsg = {
         id: makeId(),
         role: "ai",
@@ -142,13 +184,27 @@ export default function App() {
       setCurrentTypingId(consentAiMsg.id);
     } catch (e) {
       console.error(e);
+      const errId = makeId();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: errId,
+          role: "ai",
+          text: "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+          isTyping: true,
+        },
+      ]);
+      setCurrentTypingId(errId);
     } finally {
       setStarting(false);
     }
   };
 
-  // 대화 종료
+  // =========================
+  // 2. 대화 종료
+  // =========================
   const handleEndConversation = () => {
+    // 1) 마지막에 고정용 AI 종료 메시지 추가 (기록은 남김)
     const endId = makeId();
     setMessages((prev) => [
       ...prev,
@@ -156,24 +212,42 @@ export default function App() {
         id: endId,
         role: "ai",
         text:
-          "오늘 대화는 여기에서 마무리하겠습니다.\n\n필요하실 때 언제든지 다시 찾아와 주세요!",
+          "오늘 대화는 여기에서 마무리하겠습니다.\n\n조금이라도 도움이 되셨다면 좋겠습니다.\n " +
+          "나중에 또 필요하실 때 언제든지 편하게 다시 찾아와 주세요!",
         isTyping: false,
       },
     ]);
 
     setCurrentTypingId(endId);
+    // 2) 상태 정리 (이전 기록은 그대로 둠)
     setStarted(false);
     setConsentState("ended");
+    setStarting(false);
+
+    setSessionId(null);
+
+    // [CHANGED] 종료 시점에 다시 precheck 창 띄우기
+    setPrecheckData(null);      // 다시 측정 강제
+    setShowPrecheck(true);      // 모달 다시 열기
   };
 
+  // =========================
+  // 3. 동의/거절 버튼
+  // =========================
   const handleConsent = async (consent) => {
-    if (!started) return alert("먼저 대화를 시작해 주세요.");
+    if (!started) {
+      alert("먼저 대화를 시작해 주세요.");
+      return;
+    }
     setConsentState(consent);
 
     const typingId = makeId();
+    const placeholderText =
+      consent === "accepted" ? "생체신호 분석 중..." : "진행 중...";
+    // 우선 placeholder 하나 박아두기
     setMessages((prev) => [
       ...prev,
-      { id: typingId, role: "ai", text: "처리 중...", isTyping: true },
+      { id: typingId, role: "ai", text: placeholderText, isTyping: true },
     ]);
     setCurrentTypingId(typingId);
 
@@ -185,21 +259,28 @@ export default function App() {
           text: "",
           biosignal_consent: consent,
           user_id: userId,
+          session_id: sessionId,
         }),
       });
-
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
       const data = await res.json();
-      const replies = Array.isArray(data.replies)
+
+      if (data.session_id) setSessionId(data.session_id);
+      if (data.consent_state) setConsentState(data.consent_state);
+
+      const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
         ? [data.reply]
         : [];
       const plotPath = data.plot_path || null;
 
+      // 여기서 "이미지 → 텍스트" 순서를 한 번에 보장
       setMessages((prev) => {
         let next = [...prev];
 
-        if (plotPath)
+        // 1) plot 먼저
+        if (plotPath) {
           next.push({
             id: makeId(),
             role: "ai",
@@ -207,35 +288,67 @@ export default function App() {
             src: apiOrigin + plotPath,
             isTyping: false,
           });
+        }
 
+        // 2) placeholder 교체
         next = next.map((m) =>
           m.id === typingId
-            ? { ...m, text: replies[0] || "(응답 없음)", isTyping: false }
+            ? { ...m, text: arr[0] || "(응답 없음)", isTyping: false }
             : m
         );
 
-        if (replies.length > 1) {
-          next.push(
-            ...replies.slice(1).map((t) => ({
-              id: makeId(),
-              role: "ai",
-              text: t,
-              isTyping: true,
-            }))
-          );
+        // 3) 나머지 텍스트 붙이기
+        if (arr.length > 1) {
+          const rest = arr.slice(1).map((t) => ({
+            id: makeId(),
+            role: "ai",
+            text: t,
+            isTyping: true,
+          }));
+          next = [...next, ...rest];
         }
+
         return next;
       });
     } catch (e) {
       console.error(e);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === typingId
+            ? {
+                ...m,
+                text: "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                isTyping: false,
+              }
+            : m
+        )
+      );
     }
   };
 
+  // =========================
+  // 4. 일반 메시지 전송
+  // =========================
   const handleSendMessage = async (message) => {
     if (!message.trim()) return;
-    if (!started) return alert("먼저 대화를 시작해 주세요.");
-    if (consentState === "unknown")
-      return alert("먼저 동의 또는 거절을 선택해 주세요.");
+    if (!userId) {
+      alert("전화번호를 먼저 입력해 주세요.");
+      return;
+    }
+    if (!started) {
+      alert("먼저 대화를 시작해 주세요.");
+      return;
+    }
+    if (consentState === "unknown") {
+      alert("먼저 생체신호 분석 동의 또는 거절을 선택해 주세요.");
+      return;
+    }
+
+    // [ADDED] 세션ID 없으면 방지
+    if (!sessionId) {
+      alert("세션이 아직 준비되지 않았습니다. 다시 '대화 시작'을 눌러 주세요.");
+      return;
+    }
 
     const userMsg = {
       id: makeId(),
@@ -250,7 +363,6 @@ export default function App() {
       text: "답변 생성 중...",
       isTyping: true,
     };
-
     setMessages((prev) => [...prev, userMsg, aiTypingMsg]);
     setCurrentTypingId(typingId);
 
@@ -258,21 +370,28 @@ export default function App() {
       const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: message, user_id: userId }),
+        body: JSON.stringify({
+          text: message,
+          user_id: userId,
+          session_id: sessionId,
+        }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
       const data = await res.json();
 
-      const replies = Array.isArray(data.replies)
+      if (data.session_id) setSessionId(data.session_id);
+      const arr = Array.isArray(data.replies)
         ? data.replies
         : data.reply
         ? [data.reply]
         : [];
       const plotPath = data.plot_path || null;
 
+      // 일반 턴에서도 plot 있으면 이미지 먼저
       setMessages((prev) => {
         let next = [...prev];
 
-        if (plotPath)
+        if (plotPath) {
           next.push({
             id: makeId(),
             role: "ai",
@@ -280,39 +399,55 @@ export default function App() {
             src: apiOrigin + plotPath,
             isTyping: false,
           });
+        }
 
+        // placeholder 교체
         next = next.map((m) =>
           m.id === typingId
-            ? { ...m, text: replies[0] || "(응답 없음)", isTyping: false }
+            ? { ...m, text: arr[0] || "(응답 없음)", isTyping: false }
             : m
         );
 
-        if (replies.length > 1)
-          next.push(
-            ...replies.slice(1).map((t) => ({
-              id: makeId(),
-              role: "ai",
-              text: t,
-              isTyping: true,
-            }))
-          );
+        // 추가 응답
+        if (arr.length > 1) {
+          const rest = arr.slice(1).map((t) => ({
+            id: makeId(),
+            role: "ai",
+            text: t,
+            isTyping: true,
+          }));
+          next = [...next, ...rest];
+        }
 
         return next;
       });
     } catch (e) {
       console.error(e);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === typingId
+            ? {
+                ...m,
+                text: "서버 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                isTyping: false,
+              }
+            : m
+        )
+      );
     }
   };
 
+  // =========================
+  // 타이핑 끝났을 때
+  // =========================
   const handleEndTyping = (id) => {
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id ? { ...m, isTyping: false } : m
-      )
+      prev.map((m) => (m.id === id ? { ...m, isTyping: false } : m))
     );
     setCurrentTypingId(null);
   };
 
+  // 다음 타이핑 잡아주기
   useEffect(() => {
     if (currentTypingId !== null) return;
     const next = messages.find((m) => m.role === "ai" && m.isTyping);
@@ -321,6 +456,21 @@ export default function App() {
 
   return (
     <div className="app">
+      <PrecheckModal
+        open={showPrecheck && !showPhoneModal}
+        onClose={() => {
+          // 실험에서 강제하려면 이 줄을 막아도 됨
+          if (!precheckData) return;
+          setShowPrecheck(false);
+        }}
+        onDone={(payload) => {
+          setPrecheckData(payload);      // 결과 저장
+          setShowPrecheck(false);        // 모달 닫기
+          console.log("precheck:", payload);
+        }}
+      />
+
+
       {/* 전화번호 입력 모달 */}
       {showPhoneModal && (
         <div
@@ -340,26 +490,49 @@ export default function App() {
               padding: 24,
               borderRadius: 12,
               width: 320,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
             }}
           >
-            <h2>전화번호 확인</h2>
-            <p style={{ fontSize: 14, color: "#555" }}>
-              전화번호를 입력해 주세요.
+            <h2 style={{ marginBottom: 8 }}>전화번호 확인</h2>
+            <p style={{ fontSize: 14, color: "#555", marginBottom: 8 }}>
+              서비스를 사용하기 위해 전화번호 11자리를 입력해 주세요.
+              <br />
+              (예: 01012345678)
             </p>
             <input
               type="tel"
               value={phoneInput}
               onChange={(e) => setPhoneInput(e.target.value)}
-              placeholder="01012345678"  
-              className="modal-full"
+              maxLength={11}
+              placeholder="01012345678"
+              style={{
+                width: "100%",
+                padding: 8,
+                borderRadius: 6,
+                border: "1px solid #ccc",
+              }}
             />
             {phoneError && (
-              <div style={{ color: "red", fontSize: 12 }}>{phoneError}</div>
+              <div
+                style={{
+                  color: "red",
+                  fontSize: 12,
+                  marginTop: 4,
+                }}
+              >
+                {phoneError}
+              </div>
             )}
             <button
               onClick={handlePhoneSubmit}
-              className="modal-full"
-              style={{ marginTop: 12, cursor: "pointer", background: "white" }}
+              style={{
+                marginTop: 12,
+                width: "100%",
+                padding: 8,
+                borderRadius: 6,
+                border: "none",
+                cursor: "pointer",
+              }}
             >
               확인
             </button>
@@ -371,42 +544,50 @@ export default function App() {
         <div className="chat-header">
           <h1>경찰관 전용 AI 챗봇</h1>
           <div className="logo-group">
-            <img src="/images/police.PNG" alt="경찰청 로고" className="chat-logo" />
-            <img src="/images/kist.PNG" alt="키스트 로고" className="chat-logo" />
+            <img src="/images/police.png" alt="경찰청 로고" className="chat-logo" />
+            <img src="/images/kist.png" alt="키스트 로고" className="chat-logo" />
           </div>
         </div>
 
         {/* 프로필 입력 라인 */}
-        <div className="profile-row">
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 8,
+            flexWrap: "wrap",
+          }}
+        >
           <input
             placeholder="부서 (예: 형사과, 교통과)"
             value={dept}
             onChange={(e) => {
               const v = e.target.value;
               setDept(v);
-              localStorage.setItem("dept", v);
+              localStorage.setItem("dept", v); // 자동 저장
             }}
-            className="profile-input dept-input"
+            className="message-input"
             disabled={started}
           />
-
           <input
             placeholder="계급 (예: 순경, 경위)"
             value={rank}
             onChange={(e) => {
               const v = e.target.value;
               setRank(v);
-              localStorage.setItem("rank", v);
+              localStorage.setItem("rank", v); // 자동 저장
             }}
-            className="profile-input rank-input"
+            className="message-input rank-input"
             disabled={started}
           />
-
           <select
             value={shiftType}
             onChange={(e) => setShiftType(e.target.value)}
-            className="profile-input shift-input"
+            className="message-input shift-input"
             disabled={started}
+            style={{ minWidth: 140 }}
+            aria-label="근무타입"
+            title="근무타입"
           >
             <option value="day">주간</option>
             <option value="night">야간</option>
@@ -461,6 +642,7 @@ function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentTypingId]);
 
+  // 가장 마지막 consent_prompt 위치 찾기
   const consentIdx = [...messages]
     .map((m, i) => (m.type === "consent_prompt" ? i : -1))
     .filter((i) => i >= 0)
@@ -486,6 +668,7 @@ function MessageList({
             />
           )}
 
+          {/* 동의 버튼 표시 (해당 세션 시작 시점에만) */}
           {i === consentIdx && consentState === "unknown" && (
             <InlineConsent
               onAccept={onInlineAccept}

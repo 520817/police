@@ -1,0 +1,248 @@
+// src/vas_sam.js
+import React, { useMemo, useState } from "react";
+import "./vas_sam.css";
+
+/* ---------------------------
+ * CheckDot
+ * --------------------------- */
+function CheckDot({ checked }) {
+  return (
+    <div className="checkdot" aria-hidden="true">
+      {checked ? <div className="checkdot__inner" /> : null}
+    </div>
+  );
+}
+
+/* ---------------------------
+ * SamCircle
+ * --------------------------- */
+function SamCircle({
+  title,
+  value,
+  onChange,
+  size = 380,
+  faceSizeOuter = 68,
+  faceSizeCenter = 72,
+}) {
+  const faces = useMemo(() => [1, 2, 3, 4, 5, 6, 7, 8, 9], []);
+  const centerValue = 5;
+  const outerFaces = faces.filter((v) => v !== centerValue);
+
+  const center = size / 2;
+  const radius = size * 0.35;
+
+  const cardClass = (active) => `sam__card ${active ? "sam__card--active" : ""}`;
+
+    return (
+    <div className="sam">
+      <div className="sam__title">{title}</div>
+
+      <div className="sam__intro">
+        지금 이 순간 느껴지는 감정에 가장 가까운 표정을 선택해 주세요.
+      </div>
+
+      {/* ✅ 세로축 + 스테이지 묶음 */}
+      <div className="sam__wrap">
+        {/* ✅ Arousal (세로 한 줄/끝 라벨) */}
+        <div
+          className="sam__axisY"
+          style={{ height: size }}
+          aria-hidden="true"
+        >
+          <div className="sam__axisYTop">에너지↑</div>
+          <div className="sam__axisYMid">Arousal</div>
+          <div className="sam__axisYBot">에너지↓</div>
+        </div>
+
+        {/* ✅ SAM stage */}
+        <div className="sam__stage" style={{ width: size, height: size }}>
+          {/* 중앙(5) */}
+          <button
+            type="button"
+            onClick={() => onChange(centerValue)}
+            className={cardClass(value === centerValue)}
+            style={{
+              position: "absolute",
+              left: center,
+              top: center,
+              transform: "translate(-50%, -50%)",
+            }}
+            aria-pressed={value === centerValue}
+          >
+            <img
+              className="sam__img"
+              src={`/sam${centerValue}.png`}
+              alt={`sam ${centerValue}`}
+              width={faceSizeCenter}
+              height={faceSizeCenter}
+            />
+            <CheckDot checked={value === centerValue} />
+          </button>
+
+          {/* 바깥 8개 */}
+          {outerFaces.map((v, i) => {
+            const angle = (2 * Math.PI * i) / outerFaces.length - Math.PI / 2;
+            const left = center + radius * Math.cos(angle);
+            const top = center + radius * Math.sin(angle);
+
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onChange(v)}
+                className={cardClass(value === v)}
+                style={{
+                  position: "absolute",
+                  left,
+                  top,
+                  transform: "translate(-50%, -50%)",
+                }}
+                aria-pressed={value === v}
+              >
+                <img
+                  className="sam__img"
+                  src={`/sam${v}.png`}
+                  alt={`sam ${v}`}
+                  width={faceSizeOuter}
+                  height={faceSizeOuter}
+                />
+                <CheckDot checked={value === v} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ✅ Valence (가로 한 줄) */}
+      <div className="sam__axisX" aria-hidden="true">
+        <span className="sam__axisXLeft">부정/불쾌</span>
+        <span className="sam__axisXLine">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          Valence&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        <span className="sam__axisXRight">긍정/쾌</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------
+ * PrecheckModalInner (hooks here)
+ * --------------------------- */
+function PrecheckModalInner({
+  onClose,
+  onDone,
+  initialVas = 0,
+  initialSam = null,
+}) {
+  // ✅ Hooks must not be conditional
+  const [vas, setVas] = useState(initialVas);
+  const [vasTouched, setVasTouched] = useState(false);
+
+  const [sam, setSam] = useState(initialSam ?? null);
+
+  const canSubmit = vasTouched && sam !== null;
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+
+    const payload = {
+      type: "pre",
+      vas,
+      sam: sam,
+      created_at: new Date().toISOString(),
+    };
+
+    localStorage.setItem("precheck", JSON.stringify(payload));
+
+    onDone?.(payload);
+    onClose?.();
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="precheckOverlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div className="precheckModal">
+        {/* 헤더 */}
+        <div className="precheckHeader">
+          <div>
+            <h1>대화 전/후 상태 체크</h1>
+            <p>스트레스 정도와 정서 상태를 선택한 뒤 제출 버튼을 클릭하세요.</p>
+          </div>
+
+          <button type="button" onClick={onClose} aria-label="닫기" className="precheckCloseBtn">
+            ✕
+          </button>
+        </div>
+
+        {/* VAS */}
+        <div className="vasBlock">
+          <div className="vasLabel">현재 스트레스 정도 (0=전혀 없음, 100=매우 심함)</div>
+
+          <div className="vasRow">
+            <input
+              className="vasSlider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={vas}
+              onChange={(e) => {
+                setVasTouched(true);
+                setVas(Number(e.target.value));
+              }}
+            />
+            <div className="vasValue">{vasTouched ? vas : "-"}</div>
+          </div>
+
+          {!vasTouched ? <div className="vasHelp">슬라이더를 한 번 움직여서 값을 선택해 주세요.</div> : null}
+        </div>
+
+        {/* SAM */}
+        <div className="samGrid">
+          <div className="samCol">
+            <SamCircle
+              title="SAM"
+              value={sam}
+              onChange={setSam}
+            />
+          </div>
+        </div>
+
+        {/* 제출 */}
+        <div className="precheckFooter">
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={handleSubmit}
+            className={[
+              "precheckSubmitBtn",
+              canSubmit ? "precheckSubmitBtn--enabled" : "precheckSubmitBtn--disabled",
+            ].join(" ")}
+          >
+            제출
+          </button>
+
+          {!canSubmit ? (
+            <div className="precheckWarn">스트레스 정도와 정서 상태를 모두 선택해야 합니다.</div>
+          ) : (
+            <div className="precheckOk">선택 완료!</div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------
+ * Wrapper: open check here
+ * --------------------------- */
+export default function PrecheckModal(props) {
+  if (!props.open) return null;
+  return <PrecheckModalInner {...props} />;
+}
