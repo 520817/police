@@ -60,13 +60,15 @@
 /* ---------- Modal ---------- */
 .precheckOverlay {
   position: fixed;
-  inset: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw;
+  height: 100vh;
   background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
   align-items: flex-start;    /* ✅ center 금지 */
   padding: 16px;
-  z-index: 2000;
+  z-index: 99999;
   box-sizing: border-box;
   isolation: isolate;
 }
@@ -276,7 +278,7 @@
 /* 가로축(Valence) */
 .sam__axisX{
   margin-top: 10px;
-  margin-left: 25px; 
+  margin-left: 82px; 
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -287,7 +289,7 @@
   pointer-events: none;
 }
 @media (max-width: 480px){
-  .sam__axisX{ margin-left: 12px; }
+  .sam__axisX{ margin-left: 62px; }
 }
 .sam__axisXLeft{ flex: 1; text-align: left; }
 .sam__axisXRight{ flex: 1; text-align: right; }
@@ -357,6 +359,7 @@
 @media (max-width: 480px){
     .vasValue{ flex-basis: 44px; font-size: 16px; }
   }
+
 
 
 
