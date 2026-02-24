@@ -664,7 +664,8 @@ export default function App() {
           onInlineAccept={() => handleConsent("accepted")}
           onInlineDecline={() => handleConsent("declined")}
           consentState={consentState}
-          pendingEnd={pendingEnd} // [ADD]
+          pendingEnd={pendingEnd}
+          console.log("consentIdx", consentIdx, "consentState", consentState, "pendingEnd", pendingEnd, "lastMsg", messages[messages.length-1]);
         />
 
         <MessageForm
