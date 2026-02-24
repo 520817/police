@@ -61,18 +61,23 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
+  display: block;
+  overflow-y: auto;
   padding: 16px;
   box-sizing: border-box;
+}
+/* iOS 최신 뷰포트 단위 대응(있으면 더 좋음) */
+@supports (height: 100dvh) {
+  .precheckOverlay { height: 100dvh; }
 }
 .precheckModal {
   width: 600px;
   max-width: 96vw;
   max-height: 92vh;
-  overflow: auto;
+
+  margin: 16px auto;
+  max-height: none;
+  overflow: visible;
   overflow-x: hidden; /* ✅ 가로 스크롤 방지 */
   background: #fff;
   border-radius: 18px;
@@ -204,26 +209,29 @@
 
 /* ---- axis를 stage 기준으로 배치 ---- */
 .sam__wrap {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: fit-content;
   margin: 0 auto;
 }
 
-@media (max-width: 480px){
-  .sam__wrap{
-    padding-left: 0; /* 축을 왼쪽에 두지 않음 */
-  }
-
 /* axisY를 왼쪽에 절대배치 */
 .sam__axisY {
-    position: static;        /* ✅ absolute 해제 */
-    width: auto;
-    height: auto !important; /* inline height 무시 */
-    flex-direction: row;     /* ✅ 가로로 */
-    justify-content: space-between;
-    margin: 0 0 8px 0;       /* stage 위에 붙이기 */
-    opacity: 0.65;
+  position: static;     /* ✅ absolute 제거 */
+  width: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  opacity: 0.55;
+  font-size: 12px;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: none;
   }
+
 
 .sam__axisYMid {
     writing-mode: horizontal-tb;
@@ -268,10 +276,24 @@
 
   /* 세로축이 너무 바깥으로 나가면 화면 폭을 잡아먹음 */
   .sam__axisY {
-    left: -56px;
-    width: 64px;
+  position: static;     /* ✅ absolute 제거 */
+  width: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  opacity: 0.55;
+  font-size: 12px;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: none;
+  }
+  @media (max-width: 480px){
+  .sam__axisY{
+    width: 56px;
     font-size: 11px;
   }
+}
 
   /* stage 아래 간격 줄이기 */
   .sam__axisX {
@@ -289,5 +311,6 @@
     font-size: 16px;
   }
 }
+
 
 
