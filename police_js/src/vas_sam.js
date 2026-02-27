@@ -178,8 +178,7 @@ function PrecheckModalInner({
     };
 
     // 저장 키도 phase로 분리하고 싶으면 아래처럼:
-    // localStorage.setItem(`${phase}check`, JSON.stringify(payload));
-    localStorage.setItem("precheck", JSON.stringify(payload)); // 기존 유지(원하면 바꿔도 됨)
+    localStorage.setItem(`${phase}check`, JSON.stringify(payload));
 
     onDone?.(payload);
     onClose?.();
