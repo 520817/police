@@ -201,7 +201,7 @@
 /* ---------- Axis Layout ---------- */
 /* PC 기준 axis 폭 */
 :root {
-  --axisY: 82px;
+  --axisY: 62px;
 }
 
 /* stage 기준으로 축 배치 */
@@ -221,7 +221,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 330px;
   opacity: 0.55;
   font-size: 12px;
   line-height: 1.2;
@@ -239,27 +240,26 @@
   margin: 0;
 }
 
-/* ✅ X축(Valence) — 글자 줄만 오른쪽으로 */
+/* X축(Valence) — 글자 줄만 오른쪽으로 */
 .sam__axisX {
+  width: calc(100% - var(--axisY));
   margin-top: 10px;
   margin-left: var(--axisY);
-  transform: translateX(95px);  
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
+  gap: 280px;
   opacity: 0.55;
   font-size: 12px;
   user-select: none;
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 .sam__axisXLeft {
-  flex: 1;
   text-align: left;
 }
 .sam__axisXRight {
-  flex: 1;
   text-align: right;
 }
 .sam__axisXLine {
@@ -273,7 +273,7 @@
 /* ---------- Mobile ---------- */
 @media (max-width: 480px) {
   :root {
-    --axisY: 62px;
+    --axisY: 42px;
   }
 
   .precheckModal {
@@ -305,17 +305,178 @@
   }
 
   .sam__axisX {
+    width: calc(100% - var(--axisY));
     margin-top: 6px;
-    transform: translateX(75px);
+    margin-left: var(--axisY);
     font-size: 11px;
     gap: 6px;
+    box-sizing: border-box;
   }
 }
 
+/* ---------- Validation ---------- */
+.validationBlock {
+  margin-top: 16px;
+}
 
+.validationTitle {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 800;
+}
 
+.validationDesc {
+  margin: 0 0 16px 0;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
 
+.ratingRow {
+  padding: 14px 0;
+  border-top: 1px solid #eee;
+}
 
+.ratingRow:first-of-type {
+  border-top: none;
+}
 
+.ratingRow__label {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  color: #222;
+}
 
+.ratingRow__buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
+.ratingBtn {
+  min-width: 42px;
+  height: 42px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.ratingBtn--active {
+  background: #222;
+  color: #fff;
+  border-color: #222;
+}
+
+.precheckBackBtn {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #222;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .ratingRow__label {
+    font-size: 13px;
+  }
+
+  .ratingBtn {
+    min-width: 38px;
+    height: 38px;
+  }
+}
+
+.analysisChips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.analysisChip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.analysisChip__label {
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.analysisChip__text {
+  flex: 1 1 auto;
+  font-size: 15px;
+  color: #222;
+}
+
+.analysisChip--original {
+  background: #fcfcfc;
+  border-color: #eee;
+  border-left: 4px solid #888; /* 왼쪽 라인으로 강조 */
+}
+
+.analysisChip--original .analysisChip__label {
+  background: #f0f0f0;
+  color: #555;
+}
+
+.analysisChip--original .analysisChip__text {
+  font-style: italic; /* 사용자 발언임을 강조 */
+  color: #444;
+}
+
+.analysisChip--situation {
+  background: #f5f8ff;
+  border-color: #cfdcff;
+}
+
+.analysisChip--situation .analysisChip__label {
+  background: #dce7ff;
+  color: #2f5fb8;
+}
+
+.analysisChip--emotion {
+  background: #fff4f4;
+  border-color: #f3c9c9;
+}
+
+.analysisChip--emotion .analysisChip__label {
+  background: #ffdede;
+  color: #b54848;
+}
+
+.ratingInlineScale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.ratingInlineScale__label {
+  font-size: 13px;
+  color: #777;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.ratingRow__buttons {
+  display: flex;
+  gap: 8px;
+}
