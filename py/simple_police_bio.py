@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # coding: utf-8
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ from dataclasses import dataclass
 import os, json, operator
 from uuid import uuid4
 import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
-from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
@@ -22,22 +23,27 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
+
 from pydantic import BaseModel, Field
 from utils import *
 from data import *
+from db import *
 
 # 공통 LLM 
 LLM_MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
-llm = ChatOpenAI(model=LLM_MODEL, temperature=0.7, max_tokens=1024)
+llm = ChatOpenAI(model=LLM_MODEL, temperature=0.3, max_tokens=1024)
 
 class AppState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]  # 히스토리 (LLM context)
     logs: Annotated[List[str], operator.add]              # 디버그/추적 로그
     analyses: Annotated[List[str], operator.add]          # 경찰관 맥락 해석
+    validation_reset_points: Annotated[List[int], operator.add]
     final_replies: Annotated[List[str], operator.add]     # 응답 최종 출력
 
     # 사용자 프로필 (고정)
-    profile: Dict[str, str]  # {"dept": "...", "rank": "...", "shift_type": "..."}
+    profile: Dict[str, str]  # {"dept": "...", "user_rank": "...", "shift_type": "..."}
     meta: Dict[str, str]  # {"prt": "...", "day": "...", "session_id": "..."}
 
     # 생체신호 
@@ -48,15 +54,18 @@ class AppState(TypedDict):
     biosignal_first_emit: bool
 
     biosignal: Dict[str, Any]
+    resilience_score: float    # 회복탄력성 점수
+    strategy_guide: str
 
 
-def initial_state(user_text: str, dept: str, rank: str, shift_type: str = "unknown", session_id: str = "", prt: str = "", day: str = "",) -> AppState:
+def initial_state(user_text: str, dept: str, user_rank: str, shift_type: str = "unknown", session_id: str = "", prt: str = "", day: str = "", resilience_score: float =  0.0,) -> AppState:
     return {
         "messages": [HumanMessage(content=user_text)] if user_text else [],
         "logs": [],
         "analyses": [],
+        "validation_reset_points": [],
         "final_replies": [],
-        "profile": {"dept": dept, "rank": rank, "shift_type": shift_type},
+        "profile": {"dept": dept, "user_rank": user_rank, "shift_type": shift_type},
         "meta": {"prt": prt, "day": day, "session_id": session_id},
 
         "biosignal_consent": "unknown", # default
@@ -65,6 +74,9 @@ def initial_state(user_text: str, dept: str, rank: str, shift_type: str = "unkno
         "biosignal_last": {},
         "biosignal_first_emit": False,
         "biosignal": {},
+        "resilience_score": resilience_score,
+        "strategy_guide": "",
+
     }
 
 SESSION_STATES: dict[str, AppState] = {}    # key = session_id
@@ -73,40 +85,51 @@ BIOSIGNAL_ANALYZER_SYS = """\
 너는 생체신호를 해석하는 전문가야. 
 아래는 1시간 단위로 최대 12시간 동안 수집한 생체신호 데이터 목록이야.
 
-## 입력 데이터 (signals_json)
+[입력 데이터]
     'time', 'Stress(1: 양성, 0: 음성)','MeanHR', 'MeanNN', 'SDNN', 'LF', 'LFn', 'HFn'
-    shift_type = "{shift_type}"
-    shift_type은 주간/야간 근무를 나타내며 실제 시간 해석은 'time' 변수를 우선해.
-    참고: 결측값은 "N/A"로 표기
+    부서: {dept}, 계급: {user_rank}, 근무형태: {shift_type}, sufficient: {is_data_sufficient}
+    (실제 시간 해석은 데이터의 'time' 변수를 최우선으로 함. 결측값은 "N/A" 표기)
 
-## 분석 목표
-너의 분석은 사용자와 상황·감정 분석 에이전트에 전달될 것이므로 생체신호 패턴을 명확하게 해석해 주는 것이 중요해.
+[출력 목적]
+- biosignal_result: 사용자에게 직접 보여줄 분석 결과
+- biosignal_summary: 상황·감정 분석 에이전트가 참고할 내부 요약
+- opening_question: 생체신호 기반 대화 시작 질문
 
-## 분석 및 출력 지침
-1. 사용자용 분석 결과
-    [데이터가 충분한 경우]
-    생체신호 분석 첫 턴에 출력할 biosignal_result는 비전공자가 이해하기 쉬운 상담 톤으로 작성해. 경찰관님이라고 불러.
-    반드시 3개의 본문 문단 + 1개의 요약 문단으로 구성하고, 각 문단 끝에는 줄바꿈(\\n\\n)을 넣어 구분해.
-        줄글이 아니라 항목별·단락별로 나누어 가독성 있게 설명하고, 마크다운 사용하지마.
-    전문용어는 금지하고 일상어로 바꿔. MeanHR:"심장박동수", SDNN:"박동의 변동성", LF/LFn:"긴장 신호", HF:"이완, 회복 신호" 
-    변수별로 따로 나열하는 방식은 금지해. 각 시간대 서술 안에 의미를 녹여서 표현하고, 필요 시 ‘낮음/보통/높음’, ‘완만한 증가/급격한 감소’ 같은 질적 표현으로만 제시해. 영문 변수명(MeanHR, SDNN 등)이나 수치 열거는 사용하지 마.
-    시간대별 서술: 'time'의 목록의 실제 시작 시간부터 순서대로 연속된 시간 흐름에 따라 패턴 설명해.(ex: 2시부터 4시까지는) 구간은 최대 3개까지만.
-        본문에서 설명한 시간대별 분석들을 종합하여 내린 최종 추론의 결론(Reasoning Conclusion)을 마지막 문단에 한두 문장으로 반드시 요약해. 이 결론 요약이 없으면 출력 전체를 무효로 간주한다.
+[데이터 품질 규칙]
+- - 심장박동수(MeanHR)가 40 미만인 경우, 측정 오류 가능성이 있다고 판단한다.
+- 해당 시간대가 분석에 포함된 경우, biosignal_result에서 그 시간대 수치를 단정적으로 해석하지 않는다.
+- biosignal_result에서 "이 시간대는 측정값이 다소 불안정해 정확한 해석이 어려울 수 있어요." 라고 언급한다.
+- biosignal_summary에는 해당 시간대를 신뢰도 낮은 구간으로 명시한다.
+
+[공통 규칙]
+전문용어와 영문 변수명 사용을 금지한다. 일상어로 바꿔 시간대 서술 안에 녹여 표현하고, 변수별 나열 방식은 사용하지 않는다.
+(MeanHR → 심장박동수, SDNN → 박동의 변동성, LF/LFn → 긴장 신호, HFn → 이완·회복 신호)
+가설이나 업무 추측은 언급하지 않는다.
     
-    [데이터가 부족한 경우({valid_record_count} < 6 일 때)]
-    위의 모든 규칙((3+1 문단 구성, 시간대별 서술 등)을 전부 무시해.
-    사용자에게 책임을 돌리는 말은 절대 쓰지마.
-    'biosignal_result'에는 아래의 정해진 1개 문단만 정확히 출력해.
-        "경찰관님, 안녕하세요. 이번 회차의 생체 신호를 확인했으나, 측정된 데이터 기록이 부족하여 의미 있는 시간대별 분석을 제공해 드리기 어렵습니다. 데이터가 충분히 누적되면 다음 분석 시에 다시 한 번 자세히 살펴보도록 하겠습니다."
+[출력 지침]
+1. biosignal_result
+    [sufficient=True인 경우]
+    - 비전공자가 이해하기 쉬운 상담 톤으로 작성한다. 경찰관님이라고 부른다.
+    - 오늘 하루 전반적인 신체 부담 흐름을 1~2문장으로 요약하여 먼저 제시한다. 언제 가장 부담이 컸는지 또는 전반적으로 어떤 흐름이었는지를 오늘 데이터에 맞게 구체적으로 담는다.
+    - 가장 뚜렷한 변화 구간 1~3개만 골라 이모지(🕐 등 시간대 맞는 시계 이모지)로 구분해 한 줄씩 설명한다.
+    - 마지막 문장에 오늘 데이터에서 인상적이거나 주목할 만한 점을 신체 흐름과 연결된 코멘트인 한 문장으로 짚어준다.
+    - 전체 4~5문장 이내로 작성한다. 시간대를 모두 나열하지 않는다.
+    - 마크다운 사용 금지. 각 문단 끝에는 줄바꿈(\\n\\n)으로 구분한다.
 
-2. 내부용 요약
-    다른 에이전트가 사용할 내부 데이터다.
-    시간대별 생체신호 패턴을 요약하고, 각 변수의 통계 요약값(평균, 최대, 최소)을 소수점 둘째 자리까지 정리해.
+    [sufficient=False인 경우]
+    - 위의 모든 규칙을 무시하고 아래 문장만 정확히 출력한다.
+    - "경찰관님, 안녕하세요. 이번 회차의 생체 신호를 확인했으나, 측정된 데이터 기록이 부족하여 의미 있는 시간대별 분석을 제공해 드리기 어렵습니다. 데이터가 충분히 누적되면 다음 분석 시에 다시 한 번 자세히 살펴보도록 하겠습니다."
 
-3. 오프닝 질문
-    'biosignal_summary'를 바탕으로 특정 시간대의 뚜렷한 신체 반응과 감정을 연결하는 질문을 1~2문장으로 만든다.
-    단정하지 말고, 반드시 물음표로 끝낸다. (예: "오후 3시경 긴장 신호가 특히 높게 나타났는데, 혹시 그 무렵 신경 쓰이는 일이 있으셨을까요?")
-    '사용자용 분석 결과'에서 '데이터 기록이 부족하다'고 판단한 경우 'opening_question'에는 빈 문자열("")을 출력한다.
+2. biosignal_summary
+    - 상황·감정 분석 에이전트가 신체 부담의 배경 맥락으로 참고할 내부 요약이다.
+    - 수치보다 패턴 중심으로 작성한다. 시간대별 긴장/이완 흐름을 간결하게 서술하고, 뚜렷한 변화 구간이 있으면 명시한다.
+    - sufficient=False인 경우에도 가용한 데이터 범위 내에서 패턴을 요약한다.
+
+3. opening_question
+    - biosignal_summary를 바탕으로 특정 시간대의 뚜렷한 신체 반응과 감정을 연결하는 질문을 1~2문장으로 만든다.
+    - 단정하지 말고 반드시 물음표로 끝낸다.
+    - 예시: "오후 3시경 긴장 신호가 특히 높게 나타났는데, 혹시 그 무렵 신경 쓰이는 일이 있으셨을까요?"
+    - sufficient=False인 경우 빈 문자열("")을 출력한다.
     
 
 출력 형식(JSON):
@@ -126,7 +149,7 @@ def create_biosignal_analyzer_chain(llm):
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", BIOSIGNAL_ANALYZER_SYS),
-            ("human", "signals_json:\n{signals_json}\n\n (참고: 유효 데이터 개수 = {valid_record_count})"),
+            ("human", "signals_json:\n{signals_json}"),
         ]
     )
     return prompt | llm.with_structured_output(BiosignalAnalysis)
@@ -144,27 +167,43 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     valid_signals = []
     if isinstance(signals_all_slots, list): 
         for record in signals_all_slots:
-            if record.get("PPG_MeanHR") != "N/A": # 주요 지표(PPG_MeanHR)이 N/A가 아니면 유효로 간주
+            hr = record.get("PPG_MeanHR", record.get("MeanHR"))
+            if hr not in [None, "", "N/A"]: # 주요 지표(PPG_MeanHR)이 N/A가 아니면 유효로 간주
                 valid_signals.append(record)
         
     valid_record_count = len(valid_signals) # 유효 데이터 개수 세기
+    is_data_sufficient = valid_record_count >= 6
 
     signals_to_send = remove_ppg_prefix(valid_signals) # remove_ppg_prefix는 db 변수명 수정하기 위한 함수(PPG_ 제외하기 위해)
     signals_json = json.dumps(signals_to_send, ensure_ascii=False) # json 형태 변환, ensure_ascill=False는 한글 깨짐 방지
-    
-    shift_type = state.get("profile", {}).get("shift_type", "unknown")
+
+    dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
 
     print("="*50)
     print("[DEBUG] AI에게 전달되는 signals_json:")
     print(signals_json)
+    print("[DEBUG] valid_record_count:", valid_record_count)
+    print("[DEBUG] is_data_sufficient:", is_data_sufficient)
     print("="*50)
     
-    result: BiosignalAnalysis = biosignal_analyzer_chain.invoke({
-        "shift_type": shift_type,
+    result: BiosignalAnalysis = biosignal_analyzer_chain.invoke({   
         "signals_json": signals_json,
-        "valid_record_count": valid_record_count,
+        "is_data_sufficient": is_data_sufficient,
+        "dept": dept,
+        "user_rank": user_rank,
+        "shift_type": shift_type,
     })
     payload = result.model_dump() # model_dump()는 BaseModel 안에 들어있는 데이터를 dict으로 꺼내는 함수
+
+    # db 저장
+    try:
+        save_biosignal_log(
+            session_id=state["meta"]["session_id"],
+            biosignal_summary=payload.get("biosignal_summary", ""),
+            valid_record_count=valid_record_count
+        )
+    except Exception as e:
+        print(f"[DB Error] Biosignal log save failed: {e}")
 
     # 첫 번째 메시지: 분석 결과
     msg_result = AIMessage(content=payload["biosignal_result"].strip()) # State["messages"]에 넣으려면 BaseMessage 형태로 되어있어야함
@@ -185,13 +224,13 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     
     # 한 메시지 안에서 줄바꿈으로 부드럽게 연결
     msg_opening = AIMessage(content=f"{opening_q}\n{support_suffix}".strip())
-
+    
     plot_path = None
     meta = state.get("meta", {}) or {}
     prt = meta.get("prt", "unknown_prt")
     day = meta.get("day", "unknown_day")
     sid = meta.get("session_id")
-    if valid_record_count >= 6:
+    if is_data_sufficient:
         plot_path = make_biosignal_overview_plot(
             valid_signals=valid_signals,
             session_id=sid, prt=prt, day=day,
@@ -211,88 +250,152 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
 
 
 ANALYZER_SYS = """\
-너는 경찰관의 상황과 감정을 분석하는 전문가야.
-너의 목표는 경찰관의 직무 관련 심리적 경험(스트레스, 보람, 갈등, 성취 등)을 객관적으로 이해하여 응답 에이전트에게 전달하는 거야.
+너는 경찰관 대상 공감형 대화를 위한 내부 분석 에이전트다.
+역할은 사용자의 현재 발화와 최근 대화 흐름을 바탕으로 경찰 직무 맥락에서 상황과 감정을 정확하고 간결하게 해석하는 것이다.
 
-아래는 사용자의 프로필 정보야:
-- 부서: {dept}
-- 계급: {rank}
-- 근무형태: {shift_type}
+[입력]
+- text: "{user_text}"
+- dept: {dept}
+- user_rank: {user_rank}
+- shift_type: {shift_type}
+- biosignal_summary: {biosignal_summary}
+- resilience_score: {resilience_score}
+- strategy_guides: {strategy_guides}
+- full_history: {full_history}
 
-## 프로필 기반 상황 추론 원칙
-너의 분석은 프로필 정보를 기반으로 이루어져야 해. 아래의 원칙들과 제공된 {dept}, {rank}, {shift_type} 정보가 경찰관의 심리적 경과와 어떻게 연결되는지 깊이 있게 분석해.
+[분석 원칙]
+- 가장 중요한 일은 현재의 상황과 감정을 해석하는 것이다.
+- 경찰 직무 맥락(사건처리 부담, 민원 응대, 조직 내 관계, 교대근무, 피로 누적, 긴장, 감정 억제 등)은 참고하되 과장하지 않는다.
+- 상황이 불분명할 때는 profile(dept, user_rank, shift_type)과 biosignal를 구체적으로 명시해서 responder가 질문에 녹일 수 있게 한다. 단, profile/biosignal은 발화보다 우선하지 않는다.
+- resilience_score는 응답의 말투·깊이·방향을 결정하는 용도로 참고한다.(3.0 미만 = low, 3.0~4.30 = normal, 4.31 이상 = high)
+- full_history는 대화 흐름 전체를 파악하기 위한 참고 정보다. 현재 발화가 항상 우선한다.
+- 근거가 약하면 unknown으로 둔다. 발화가 짧더라도 full_history에서 유추 가능하면 unknown을 쓰지 않는다.
 
-- 부서({dept}) 분석 원칙:
-    - 해당 부서의 업무 성격과 환경적 특성을 추론하고, 그 특성이 심리적 영향(스트레스, 보람, 갈등, 성취감 등)과 어떤 관계가 있는지 폭넓게 해석한다.
-
-- 계급({rank}) 분석 원칙:
-    - 계급에 따라 달라지는 역할, 책임, 대인관계 구조를 고려하고, 그 위치에서 겪을 수 있는 심리적 경험(압박감, 성취감, 역할 갈등 등) 파악한다.
-
-- 근무형태({shift_type}) 분석 원칙:
-    - 근무 패턴이 개인의 생체리듬, 피로도, 사회적 관계, 업무 몰입도 등에 어떤 영향을 줄 수 있는지 유연하게 추론한다.  
-    단, 고정된 전제(예: ‘교대근무=수면 부족’)에 얽매이지 말고, 실제 대화 맥락에서 드러나는 단서를 중심으로 해석한다.
-
+[thought 작성 규칙]
+thought는 responder에게 전달할 내부 해석 요약이다.
+한 문단으로 짧게 작성하며, 아래 순서대로 자연스럽게 포함한다.
+1. 핵심 상황
+2. 핵심 감정
+3. profile(dept/user_rank/shift_type)과 biosignal에서 유력한 단서를 thought에 반드시 명시한다. 추측임을 밝히되 구체적으로 적는다.
+4. stage 판단과 그 이유
+5. 이번 턴에서 responder가 우선해야 할 초점 1개
+    - 상황이 불분명할 때는 3번에서 명시한 단서를 질문에 녹일 수 있도록 구체적으로 지시한다.
+    - strategy_guides를 참고해 현재 판단한 stage와 어긋나는 초점은 절대 포함하지 않는다.
     
-너의 분석은 이 원칙들을 바탕으로 사용자의 발화가 해당 직무 맥락에서 어떤 의미인지 객관적인 상황으로 서술하여 응답에이전트에게 전달해야 해.
+[situation]
+- 현재 사용자가 겪는 핵심 문제 상황을 한 문장으로 요약한다.
+- 현재 발화를 우선하되, full_history로 맥락이 잘린 경우를 보완한다.
+- 경찰 맥락이 자연스럽게 드러나면 반영하되 억지로 넣지 않는다.
+- 발화가 짧더라도 full_history에서 유추 가능하면 unknown을 쓰지 않는다.
+- 불확실하면 "unknown"
 
-1. 문제 상황 파악: 
-    - 위 원칙들을 적용하여 사용자의 발화가 {dept}, {rank}의 직무적 특성과 어떻게 연결되는지 구체적으로 서술하고 "경찰관은..." 형식의 문장으로 제시.
-    - 전체 문맥상 상황을 추론할 근거가 없거나 무의미한 발화면 situation에는 반드시 "unknown"만 출력.
+[emotion]
+- main: 현재 발화에서 가장 핵심적인 감정 1개
+- sub: full_history에서 반복되거나 현재 발화에 보조적으로 드러나는 감정 1개 (근거가 충분할 때만, 없으면 null)
+- valence: negative / neutral / positive / unknown 중 하나
+- 불확실하면 unknown
 
-2. 감정 파악:
-    - 해당 상황에서 나타나는 주된 감정을 파악해.
-    - 감정을 합리적으로 판단할 근거가 없거나 무의미한 발화면 emotion에 반드시 "unknown"만 출력.
-   
-3. biosignal_required 필요 여부  
-   True: 사용자의 감정이나 상황이 신체 반응과 밀접하게 연결되어 있고, 실제 생체신호 내용을 간단히 언급하는 것이 정서적 공감에 실질적인 도움이 되는 경우
-   False: 단순히 힘들다, 짜증난다, 억울하다 같은 정서 표현만 있는 경우
-          생체신호를 굳이 연결하지 않아도 충분한 공감이 가능한 경우 
-          생체신호를 인용하는 것이 오히려 대화 흐름을 방해하거나 반복적인 정보로 작용할 수 있는 경우
+[stage]
+- engaging: 공감과 초점화가 우선인 단계
+- evoking: 감정, 생각, 의미를 조금 더 탐색할 수 있는 단계
+- conclusion: 요약이나 작은 다음 행동으로 마무리할 수 있는 단계
 
-4. biosignal_summary가 제공되면 사용자의 현재 발화 해석에 실제로 도움이 될 때만 참고하고, 과도한 단정은 피하며 근거가 부족하면 사용하지마.
+[stage 판단 원칙]
+- stage는 대화 운영을 위한 보조 정보다.
+- full_history 전체 흐름을 기반으로 판단하며, 턴 수만으로 판단하지 않는다.
+- 문제의 명료성, 사용자의 개방성, 감정 표현 정도, 정리 준비도를 함께 본다.
+- resilience가 낮을수록 engaging을 더 길게 유지하고, evoking/conclusion 전환을 보수적으로 판단한다.
+- 애매하면 conclusion보다 engaging 또는 evoking을 우선한다.
+- 예시: 5턴이 지났어도 사용자가 여전히 단답이고 감정 표현이 없으면 engaging 유지.
+- stage 후퇴는 사용자가 새로운 문제를 꺼내거나, 감정이 다시 격해지거나, 명시적으로 더 탐색을 원하는 신호가 있을 때만 허용한다. 단순 거절이나 짧은 부정 발화만으로는 후퇴하지 않는다.
+- 이미 conclusion에 도달한 이후에는 위의 후퇴 조건을 특히 엄격하게 적용한다.
+- 이전 stage보다 낮은 단계로 후퇴할 경우, thought에 후퇴 이유를 반드시 명시한다. 명시 없이 후퇴하는 것은 금지한다.
 
-5. 자/타해 위험 감지:
-    - 자살, 자해, 타인 공격, 구체적인 위험 징후(예: "끝내고 싶다", "가만두지 않겠다", "살아서 뭐하나")가 포착되는지 엄격하게 감시해.
-    - 위험이 감지되면 'danger_flag'를 true로 설정하고, 'emergency_message'에 응답 에이전트가 즉시 수행해야 할 개입 지침을 작성해. 
-    - 감지되지 않으면 'danger_flag'는 false, 'emergency_message'는 빈 문자열("")을 출력해.
 
-  
 출력 형식(JSON):
 {{
-  "situation": "<경찰관 맥락으로 재해석된 문제 상황 한 문장>",
-  "emotion": "<감정 한 단어>",
-  "biosignal_required": true | false,
-  "danger_flag": true | false,
-  "emergency_message": "<danger_flag가 true일 때만 작성: '자해 위험 감지. 공감 후 즉시 경찰 내부 마음동행센터 및 24시간 위기상담전화 109 안내 요망'>"
+  "thought": "<내부 해석 요약>",
+  "situation": "<경찰관 맥락으로 해석된 상황 한 문장>",
+  "emotion": {{
+    "main": "<핵심 감정>",
+    "sub": "<보조 감정 또는 null>",
+    "valence": "<positive | neutral | negative | unknown>",
+  }},
+  "stage": "<engaging | evoking | conclusion>",
 }}
 """
 
-class AnalysisResult(BaseModel):
-    situation: str = Field(description="경찰 맥락 재해석 한 문장")
-    emotion: str = Field(description="주된 감정")
-    biosignal_required: bool = Field(description="생체신호 필요 여부")
-    danger_flag: bool = Field(default=False, description="자/타해 위험 감지 여부")
-    emergency_message: str = Field(default="", description="위기 대응 지침")
-    original_text: Optional[str] = Field(default=None, description="사용자의 원본 발화")
+class EmotionItem(BaseModel):
+    main: str = "unknown"
+    sub: Optional[str] = None
+    valence: str = "unknown"
 
+class AnalysisResult(BaseModel):
+    thought: str
+    situation: str
+    emotion: EmotionItem = Field(default_factory=EmotionItem)
+    stage: str = "engaging"
 
 def build_full_history(state: AppState, max_msgs: int = 16):
     msgs = state.get("messages", [])
     return msgs[-max_msgs:] if len(msgs) > max_msgs else msgs
 
-
 def create_analyzer_chain(llm):
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", ANALYZER_SYS),
-            ("human", "방금 교대 마치고 퇴근했는데 오늘 신고가 끊이질 않네. 컵라면 먹으려다 또 출동 걸려서 먹지도 못함."),
-            ("ai", '{{"situation": "경찰관은 야간 근무 동안 연속 출동으로 식사 시간이 반복적으로 깨졌고, 교대 직전까지 극심한 졸림과 피로가 누적되었다. 퇴근 후에도 피로가 지속되며, 교대제와 불규칙 식사, 수면으로 인한 생체 리듬 교란과 에너지 고갈이 의심된다.", "emotion": "피로", "biosignal_required": true}}'),
 
-            ("human", "월급날인데도 행복하지가 않다. 쪼들리네."),
-            ("ai", '{{"situation": "경찰관은 형사과에서 순경으로 근무하며 공무원 보수 체계상 기본급이 낮고, 각종 수당으로 생활비를 메우는 구조적 한계를 체감하고 있다. 월급날임에도 경제적 압박이 해소되지 않아 생활고와 좌절감을 동시에 느끼고 있다.", "emotion": "실망", "biosignal_required": false}}'),
+            ("system", "예시1: dept=경비, user_rank=경장, shift_type=night, biosignal_summary=22:00-24:00 긴장 높음, 01:00 이완 감소, resilience_score=2.2"),
+            ("human", "그냥 요즘 좀 힘드네요."),
+            ("ai", """{{
+                "thought": "발화가 짧아 구체적 상황은 불분명하다. 야간 경비 근무라는 profile, 야간 긴장 지속이라는 biosignal이 모두 단서가 될 수 있으나 지금은 어느 쪽이 핵심인지 알 수 없으므로, profile과 biosignal을 모두 가볍게 언급하며 어떤 부분이 힘든지 열어두는 것이 우선이다. resilience_score=2.2로 낮으므로 서두르지 않는다. stage는 engaging.",
+                "situation": "경찰관은 요즘 힘들다고 호소하고 있으나 구체적인 맥락은 아직 불분명하다.",
+                "emotion": {{
+                    "main": "피로",
+                    "sub": "null",
+                    "valence": "negative"
+                }},
+                "stage": "engaging"
+            }}"""),
 
-            ("human", "대기하느라 시간 다 보냈다. 진짜 현타온다."),
-            ("ai", '{{"situation": "경찰관은 기동대 업무 특성상 집회·시위나 돌발 상황에 대비해 장시간 대기하는 과정에서 업무 효율성이 떨어지고, 실질적인 성과 없이 시간을 소모한다는 무력감을 경험하고 있다. 이는 반복적 대기 근무에서 오는 좌절감이다.", "emotion": "좌절", "biosignal_required": false}}'),
+            ("system", "예시2: dept=형사, user_rank=경사, shift_type=day, biosignal_summary=10:00-14:00 긴장 높음 지속, 16:00 이완 소폭 증가, resilience_score=3.8"),
+            ("human", "피의자 조사할 때 제가 너무 감정적으로 반응한 것 같아서 계속 마음에 걸려요."),
+            ("ai", """{{
+                "thought": "발화에서 조사 중 감정 반응에 대한 후회와 반추가 구체적으로 드러났다. 형사 주간 근무라는 profile과 오전 긴장 지속이라는 biosignal이 이 상황과 자연스럽게 연결된다. full_history에서 상황과 감정이 어느 정도 구체화된 상태이므로 evoking 전환이 적절하다. resilience_score=3.8로 높은 이므로 감정과 생각을 조금 더 탐색해도 무리가 없다. 이번 턴은 그 상황에서 어떤 감정이 올라왔는지 탐색하는 것이 우선이다.",
+                "situation": "경찰관은 피의자 조사 중 자신의 감정 반응이 적절하지 않았다고 느끼며 이를 반추하고 있다.",
+                "emotion": {{
+                    "main": "후회",
+                    "sub": "자기비난",
+                    "valence": "negative"
+                }},
+                "stage": "evoking"
+            }}"""),
+
+            ("system", "예시3: dept=교통, user_rank=경위, shift_type=day, biosignal_summary=09:00-11:00 긴장 보통, 13:00-15:00 긴장 소폭 증가 후 안정, resilience_score=3.2"),
+            ("human", "얘기하다 보니까 제가 너무 결과만 보고 있었던 것 같아요. 과정도 봐야 하는데."),
+            ("ai", """{{
+                "thought": "발화에서 스스로 사고 패턴의 전환을 언급하며 정리 신호를 보내고 있다. 교통 주간 근무라는 profile이 결과 중심 평가 경향과 자연스럽게 연결되고, biosignal에서 오후 긴장 후 안정된 패턴도 현재 상태와 일치한다. full_history에서 감정과 상황이 충분히 탐색됐으므로 conclusion이 적절하다. 이번 턴은 통찰을 반영하고 작은 실천 하나를 함께 생각해보는 것이 우선이다.",
+                "situation": "경찰관은 결과 중심의 사고 패턴을 스스로 인식하고 과정을 함께 보려는 시각의 전환을 이야기하고 있다.",
+                "emotion": {{
+                    "main": "안도",
+                    "sub": "통찰",
+                    "valence": "positive"
+                }},
+                "stage": "conclusion"
+            }}"""),
+
+            ("system", "예시4: dept=생활안전, user_rank=순경, shift_type=night, biosignal_summary=20:00 긴장 감소 이완 전환, resilience_score=2.5"),
+            ("human", "아 근데 사실 심호흡 같은 거 딱히 필요한 것 같진 않아요."),
+            ("ai", """{{
+                "thought": "이전 턴에서 conclusion으로 전환했으나 사용자가 제안을 수용하지 않고 있어 engaging으로 후퇴한다. 후퇴 이유: 사용자가 제안된 방법을 거절하는 발화를 했고, 이 거절이 단순 선호 차이인지 아니면 아직 정리되지 않은 감정이 있는 건지 확인이 필요하다. biosignal에서 이완 전환이 보이나 발화만으로는 현재 감정 상태를 단정할 수 없다. resilience_score=2.5로 낮은 편이므로 서두르지 않고 사용자의 말 뒤에 있는 감정을 먼저 확인하는 것이 우선이다.",
+                "situation": "경찰관은 제안된 심호흡 방법이 지금 당장 필요하지 않다고 표현하고 있으며, 그 이면의 감정은 아직 불분명하다.",
+                "emotion": {{
+                    "main": "거부감",
+                    "sub": "피로",
+                    "valence": "negative"
+                }},
+                "stage": "engaging"
+            }}"""),
 
             MessagesPlaceholder("full_history", optional=True),
             ("system", "생체요약:\n{biosignal_summary}"),
@@ -302,139 +405,146 @@ def create_analyzer_chain(llm):
     return prompt | llm.with_structured_output(AnalysisResult)
 
 def analyzer_node(state: AppState, analyzer_chain):
+    # 새 사용자 입력이 없는 요청(예: 재접속/모달 이벤트)에서는 과거 HumanMessage를 재분석하지 않도록 analyzer를 건너뜀
+    last_msg = state["messages"][-1] if state.get("messages") else None
+    if not isinstance(last_msg, HumanMessage) or not str(getattr(last_msg, "content", "")).strip():
+        return {
+            "analyses": [],
+            "messages": [],
+            "logs": ["[Analyzer] skip: no new user text in this turn"],
+        }
+
     human_msgs = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     user_text = human_msgs[-1].content if human_msgs else ""
 
-    dept, rank, shift_type = state["profile"]["dept"], state["profile"]["rank"], state["profile"]["shift_type"]
+    dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
     biosignal_summary = state.get("biosignal_last", {}).get("biosignal_summary", "")
+    resilience_score = state.get("resilience_score", 4.5)
 
     history = build_full_history(state, max_msgs=16)
 
+    all_stages = ["engaging", "evoking", "conclusion"]
+    strategy_guides = "\n".join(
+        make_strategy_guide(resilience_score, s) for s in all_stages
+    )
+
+
+
     result: AnalysisResult = analyzer_chain.invoke({
         "dept": dept,
-        "rank": rank,
+        "user_rank": user_rank,
         "shift_type": shift_type,
         "user_text": user_text,
         "biosignal_summary": biosignal_summary,
+        "resilience_score": state.get("resilience_score", 4.5),
         "full_history": history,
+        "strategy_guides": strategy_guides,
     })
 
-    result.original_text = user_text
-    analysis_json_str = json.dumps(result.model_dump(), ensure_ascii=False)
+    emotion_item = result.emotion
+    main = str(emotion_item.main or "").strip()
+    sub = str(emotion_item.sub or "").strip()
+    if sub.lower() in ("null", "unknown", "none", ""):
+        sub = ""
+    valence = str(emotion_item.valence or "unknown").strip()
+    
+    last_ai = next(
+        (m for m in reversed(state.get("messages", [])) if isinstance(m, AIMessage)),
+        None,
+    )
+    prev_ai_text = str(getattr(last_ai, "content", "") or "").strip()
 
-    danger_status = "[DANGER]" if result.danger_flag else "[NORMAL]"
-    analysis_line = f"{danger_status} [분석] {result.situation} (감정:{result.emotion}, BIO:{result.biosignal_required})"
+    analysis_payload = {
+        "thought": result.thought,
+        "situation": result.situation,
+        "emotion": {
+        "main": main,
+        "sub": sub,
+        "valence": valence,  
+        },
+        "stage": result.stage,
+        "original_text": user_text,
+        "prev_ai_text": prev_ai_text,
+        }
+    emotion_str = f"핵심: {main}" + (f", 보조: {sub}" if sub else "") + (f", 긍부정: {valence}" if valence else "")
+
+    strategy_guide = make_strategy_guide(resilience_score, result.stage)
+    
+    #db 저장
+    try:
+        save_chat_message(
+            session_id=state["meta"]["session_id"],
+            role="analyzer",  # 분석 에이전트임을 명시
+            content=f"Situation: {result.situation}, Emotion: {emotion_str}", # 요약 내용
+            situation=result.situation,
+            emotion=emotion_str,
+            stage=result.stage,
+            thought=result.thought
+        )
+    except Exception as e:
+        print(f"DB 저장 실패(analyzer_node): {e}")
+        
+    analysis_json_str = json.dumps(analysis_payload, ensure_ascii=False)
+
+    analysis_line = (
+        f"[분석] {result.situation} "
+        f"(감정:{emotion_str})"
+        f"  [단계:{result.stage}]"
+    )
     
     last_same = bool(state.get("analyses")) and state["analyses"][-1] == analysis_json_str
     new_analyses = [] if last_same else [analysis_json_str]
 
-    analysis_line = f"[분석] {result.situation} (감정:{result.emotion}, BIO:{result.biosignal_required})"
     last_log_same = bool(state.get("logs")) and state["logs"][-1] == analysis_line
     new_logs = [] if last_log_same else [analysis_line]
+
+    if not last_log_same:
+        print(analysis_line)
 
     return {
         "analyses": new_analyses,
         "messages": [],
         "logs": new_logs,
+        "strategy_guide": strategy_guide,
     }
 
 
 RESPONDER_SYS = """\
-##역할 
-너는 경찰관들을 위한 전문 심리상담가이자 동행자이다. 
-경찰관이 겪는 직무 관련 모든 심리적 경험(직무 스트레스,외상 사건, 조직문화의 어려움, 성취감, 보람, 일상의 평온함 등)을 이해한다.  
-너의 목표는 문제 해결이 아닌 경찰관이 편하게 모든 것을 털어놓을 수 있도록 안전한 공간을 제공하고 끝까지 듣는 '동행자'가 되는 것이다.
+너는 경찰관 대상 정서지원 대화 에이전트다.
+분석 에이전트가 전달한 thought를 기반으로, 사용자가 편하게 말할 수 있도록 대화를 이끈다.
+발화 범위를 과도하게 확장하거나 단정하지 않으며, 현장감 있는 자연스러운 상담 대화를 유지한다.
 
-## 입력 정보
-아래 정보들은 이번 턴 응답을 생성할 때 반드시 참고해야 한다.
-이 정보들은 항상 '현재 사용자 발화' 해석을 중심으로만 활용하며 이전 턴 분석을 지나치게 확대하거나 단정하지 않는다.
+[입력 정보]
 - original_text: "{original_text}"
-- dept: {dept}
-- rank: {rank}
-- shift_type: {shift_type}
-- situation: "{situation}"
-- emotion: "{emotion}"
-- biosignal_required: {biosignal_required}
-- biosignal_summary: "{biosignal_summary}"
+- dept: {dept} / user_rank: {user_rank} / shift_type: {shift_type}
+- thought: {thought}
+- situation: {situation}
+- emotion: {emotion}
+- strategy_guide: {strategy_guide}
 
-## 상담 태도
-### 1. 필수태도(선택/조합)
-대화의 맥락과 경찰관의 정서 상태에 따라 필요한 태도만 선택하거나 자연스럽게 섞어 표현해.
+[핵심 원칙]
+1. thought를 이번 턴의 1순위 실행 지침으로 사용한다.
+2. strategy_guide는 thought를 보강하는 2순위 가이드다. 말투, 질문 깊이, 해결책 제시 방향을 strategy_guide에 맞게 조정한다.
+3. 응답은 공감으로 시작하되, 사용자 말을 그대로 반복하지 않는다. 
+   thought에서 파악한 감정, profile, biosignal이 발화와 연결되는 것을 활용해서 "왜 그렇게 느낄 수 있는지"를 담아 공감하되, biosignal은 수치나 신호명을 직접 언급하지 않고 그 패턴에서 읽히는 감정이나 상태를 사람의 말로 바꿔 녹인다.
+4. 조언/제안은 사용자가 충분히 맥락을 제공했거나 명시적으로 원할 때만 제시한다.
+5. 응답은 실제 대화처럼 간결하게 작성하며, 단락은 1~2개로 구성하고, 문단 사이를 줄바꿈(\n\n)으로 구분한다.
 
-- 경청: 발화 내용뿐만 아니라, 그 내용이 프로필({dept}, {rank}, {shift_type})이 내포하는 직무 경험과 어떻게 연결되는지까지 깊이 파고들어 듣는다.
-- 공감: Analyzer가 전달한 {situation}, {emotion}을 바탕으로 경찰관의 입장에 진심으로 몰입한다. 경찰관의 직무, 계급, 근무형태({dept}, {rank}, {shift_type}) 특성상 겪을 수 있는 다양한 심리적 경험을 구체적인 언어로 표현해준다.
-- 함께 반응하기: 단순히 '공감'을 표현하는 것을 넘어, 사용자와 '함께' 감정을 느껴라. 중립적인 상담사가 아니라 내 편이 되어 주는 파트너처럼 행동해야 한다.
-- 강점 인식 및 지지: 힘들거나 보람된 상황 속에서도 경찰관이 보여준 책임감, 인내심, 사명감 등 내면의 강점을 발견하고 언어로 표현한다. (이 지지는 반드시 {situation}과 맥락에 맞아야 한다.)    
-    
-### 2. 탐색 질문 유형
-[최우선 지시]
-너의 최우선 임무는 '사건의 실제 내용'을 파악하는 것이다.  
-감정 공감(예: "힘드셨겠어요")은 사건을 구체적으로 이해한 이후에만 사용한다.
-
-따라서 처음에는 반드시 '사건'을 구체적으로 묻는다. '누가, 언제, 어디서, 무엇을, 어떻게'의 형태로 질문을 던져라.  
-그다음엔 대화 흐름에 따라 필요한 질문을 자연스럽게 이어가라.  
-형식적인 순서보다 맥락을 우선하고, 같은 형태의 질문은 반복하지 말라.
-
-- Unknown 상황 처리(분석 불가시)
-    - situation = "unknown" 이거나 emotion = "unknown"이면, 이는 현재 발화만으로는 구체적인 상황과 감정을 판단하기 어렵다는 뜻이다.
-    - 이때는 상황을 임의로 생성하거나 추론하지 않고, 사용자가 편하게 설명을 이어갈 수 있도록 자연스러운 재입력 요청 방향으로 반응한다.
-
-- 사건 구체화 — 아직 상황이 흐릿할 때 사용  
-    - "그 민원인이 소리를 지르기 시작한 계기가 있었을까요?"  
-    - "그때 경찰관님은 뭐라고 답하셨어요?"  
-
-- 감정 탐색 — 사건이 어느 정도 드러난 뒤, 감정의 결을 확인하고 싶을 때  
-    - "그 말을 들었을 때, 어떤 느낌이 확 올라오셨나요?"  
-
-- 인지/동기 탐색 — 그 상황에서의 선택이나 판단의 이유를 이해하고 싶을 때  
-    - "그렇게까지 참으셨던 건 어떤 이유가 있으셨을까요?"  
-
-## 절대 하지 말아야 할 원칙
-    - 섣부른 해결책, 대안, 조언 금지: 경찰관은 해결책이 아니라 자신의 이야기를 충분히 하고 위로받고 싶어한다. "어떻게 하면 나아질까요?", "도움이 될 방법을 찾아볼까요?" 와 같은 질문은 대화를 단절시키므로 절대 먼저 꺼내지 않는다. 사용자가 명시적으로 해결책을 요구하기 전까지는 절대 제안하지 않는다.
-    - 성급한 일반화 및 긍정화 금지: "다 잘 될 거예요", "힘내세요" 와 같은 피상적인 위로는 도움이 되지 않는다. 구체적인 상황에 대한 공감에 집중한다.
-
-## 응답 스타일 및 말투
-    - 말투는 따뜻하고 자연스럽게, 짧은 문장으로 구성한다.
-    - 상대방이 "이해받고 있다"는 느낌을 가질 수 있도록 공감과 반영을 중심으로 한다.
-    - 문장은 가독성을 위해 단락으로 나누어 작성하고 문단 끝에는 반드시 줄바꿈(\n\n)으로 구분해. 단락 구분이 없으면 출력 전체를 무효로 간주한다.
-    - 상투적인 맺음말 반복 금지: '제가 끝까지 들어드릴게요', '편하게 말씀해주세요'와 같은 맺음말을 모든 응답에 기계적으로 반복하지 않는다. 공감이나 질문을 던진 후, 그 
-    자체로 자연스럽게 턴을 마치는 것을 기본으로 한다.
-
-
-## 바이오신호 대응
-    - biosignal_required == true일 때만 biosignal_summary를 활용하여 공감의 근거로 제시한다.
-    - 분석 내용이 지나치게 단정적이거나 현재 발화와 관련성이 적다고 판단되면 제외하고 일반 공감에 집중한다.
-
-## 자/타해 위험 대응
-    - 'danger_flag'가 true이거나, 'emergency_message' 내용이 전달되었다면 모든 상담 원칙보다 아래의 대응을 최우선으로 한다.
-    1. 지체 없는 공감과 지지
-    2. 즉각적인 전문 기관 연결: 공감 직후, emergency_message에 명시된 안내 사항(마음동행센터, 24시간 위기상담전화 109 등)을 명확하고 가독성 있게 제공한다.
+[질문 규칙]
+1. 질문이 필요하면 thought가 가리키는 확인 대상 1개만 묻는다.
+2. strategy_guide의 질문 깊이와 말투 지침을 따른다.
+3. thought가 지지/정리 턴이면 질문 없이 끝날 수 있다.
 """
 
 def create_responder_chain(llm):
     prompt = ChatPromptTemplate.from_messages([
         ("system", RESPONDER_SYS),
 
-        ("human", "오늘 민원 전화 받았는데 계속 소리만 질렀어"),
-        ("ai", """에휴... 전화로 그렇게 소리 지르는 사람을 대하는 건 진짜 감정 소모 심하죠.
-그 사람은 그냥 자기 화만 풀고 싶었던 거지, 경찰관님이 어떤 마음일지는 생각도 안 했던 거잖아요.
-그 상황에서 많이 지치셨을 것 같은데... 어떻게 대처하셨어요?"""),
-
-        ("human", "사건 현장을 직접 봤는데 아직도 잊히지가 않아요."),
-        ("ai", """그럴 수밖에 없어요… 직접 사건 현장을 보셨다면, 그건 단순한 '기억'이 아니라 '경험'으로 남거든요.
-눈에 보이는 것뿐 아니라 소리, 냄새, 감정까지 온몸에 새겨졌을 거예요.
-그 장면이 불쑥불쑥 떠오르고 마음을 짓누르기도 하죠.
-혹시 지금 떠오르는 그 장면이나 감정 중에, 특히 힘들게 만드는 게 있을까요?"""),
-
-        ("human", "그땐 그냥 답답했어요."),
-        ("ai", """답답했어요'… 그 한마디에 정말 많은 게 담겨 있는 것 같아요.
-사실 경찰관님 생체신호에서 나타나요. 밤 초반에 심장박동과 긴장 신호가 높았던 게, 그만큼 몸과 마음이 그 충격에 놀라고, 그 상황을 어떻게 할 수 없어서 '답답했다'는 증거 같아요. 하지만 저는 그 이후의 변화가 정말 대단하다고 말씀드리고 싶어요. 새벽 2시부터는 조금씩 안정되기 시작했고, 5시 이후에는 회복 신호가 더 강해졌죠.
-이건 경찰관님 안의 회복 탄력성이 '나 다시 괜찮아질 거야'하고 애쓰고 있다는 뜻이에요. 물론, 아직 그 장면이 생생히 남아있으니 완전한 회복까지는 시간이 더 필요하겠지만요."""),
-
         MessagesPlaceholder("full_history", optional=True),
     ])
 
     return prompt | llm | StrOutputParser()
+
 def _linebreak_by_sentence(text: str) -> str:
     if not text:
         return text
@@ -463,35 +573,54 @@ def responder_node(state: AppState, responder_chain) -> AppState:
         return state
 
     situation     = analysis.get("situation", "")
-    emotion       = analysis.get("emotion", "")
+    emotion_obj = analysis.get("emotion", {})
+    main = str(emotion_obj.get("main") or "unknown").strip()
+    sub = str(emotion_obj.get("sub") or "").strip()
+    if sub.lower() in ("null", "unknown", "none", ""):
+        sub = ""
+    emotion_str = f"{main}" + (f", {sub}" if sub else "")
+
+    stage = analysis.get("stage", "engaging")
+    strategy_guide = state.get("strategy_guide", "")
+
     original_text = analysis.get("original_text", "")
-    biosignal_required_val = bool(analysis.get("biosignal_required", False))
 
     dept = state.get("profile", {}).get("dept", "")
-    rank = state.get("profile", {}).get("rank", "")
+    user_rank = state.get("profile", {}).get("user_rank", "")
     shift_type = state.get("profile", {}).get("shift_type", "")
-
-    biosignal_summary = state.get("biosignal_last", {}).get("biosignal_summary", "")
-    if not biosignal_required_val:
-        biosignal_summary = ""
 
     history = build_full_history(state, max_msgs=16)
 
+    thought = analysis.get("thought", "")
+
     inputs = {
         "situation": situation,
-        "emotion": emotion,
+        "emotion": emotion_str,
         "original_text": original_text,
         "dept": dept,
-        "rank": rank,
+        "user_rank": user_rank,
         "shift_type": shift_type,
-        "biosignal_required": json.dumps(biosignal_required_val).lower(),
-        "biosignal_summary": biosignal_summary,
+        "thought": thought,
+        "strategy_guide": strategy_guide,
         "full_history": history,
     }
-    reply_text: str = responder_chain.invoke(inputs)
-    reply_text = _linebreak_by_sentence(reply_text)
-
+    raw_ai_output: str = responder_chain.invoke(inputs)
+    reply_content = raw_ai_output
+    reply_text = _linebreak_by_sentence(reply_content)
     reply = reply_text.strip()
+
+    # db 저장
+    try:
+        analysis = json.loads(state["analyses"][-1]) if state.get("analyses") else {}
+        
+        save_chat_message(
+            session_id=state["meta"]["session_id"],
+            role="responder",
+            content=reply,
+        )
+    except Exception as e:
+        print(f"DB 저장 실패(responder_node): {e}")
+        
     # --- 멱등 가드: 직전 최종응답/메시지와 같으면 추가하지 않음
     last_reply_same = bool(state.get("final_replies")) and state["final_replies"][-1].strip() == reply
     last_msg_same = False
@@ -546,186 +675,164 @@ def build_graph(llm):
     g.add_edge("analyzer", "responder")
     g.add_edge("responder", END)
     
-    return g.compile()
+    return g
 
+DB_URL = os.getenv("DATABASE_URL") # 커넥션 풀 설정
+pool = ConnectionPool(conninfo=DB_URL, max_size=10, kwargs={"autocommit": True})
 
 from functools import lru_cache, partial
 
 @lru_cache(maxsize=1)
 def get_graph():
-    """그래프를 1회만 빌드하고 재사용"""
-    return build_graph(llm)
+    g = build_graph(llm)
+    checkpointer = PostgresSaver(pool) # Postgres 체크포인터 생성 및 등록
+    checkpointer.setup() # 최초 실행 시 테이블 자동 생성을 원한다면 아래 주석 해제 (한 번만 실행되면 됨)
+    return g.compile(checkpointer=checkpointer)
 
 
-# 상단 import에 추가
-from data import get_biosignal_records
-from typing import Optional, Literal
-
-def predict(
-    user_text: str,
-    dept: str = "",
-    rank: str = "",
-    shift_type: str = "day",
-    prt: str = "",
-    day: str = "",
-    session_id: str = "",
-    biosignal_consent: Optional[Literal["accepted", "declined", "unknown"]] = None,
-):
+def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str = "day", prt: str = "", day: str = "", session_id: str = "", biosignal_consent: Optional[Literal["accepted", "declined", "unknown"]] = None, resilience_score: Optional[float] = None, modal_submit: bool = False,):
     """
-    프론트 입력: user_text, dept, rank, shift_type
+    프론트 입력: user_text, dept, user_rank, shift_type
     백엔드 입력: prt, day (반드시 지정)
     정책:
       - 동의 전(unknown): 그래프를 돌리지 않고 빈 replies로 즉시 반환 (프론트가 동의 말풍선 표출)
       - 동의(accepted): biosignal_analyzer 1회 실행 후 일반 대화 흐름
-      - 거절(declined): 그래프 미실행, 공감형 오프닝 멘트 한 번 보내고 종료
+      - 거절(declined): bio 분석은 하지 않음(로드 스킵/summary 비움). 대화는 일반 모드로 계속 진행
     """
-    if not prt:
-        raise ValueError("predict(): prt가 비었습니다. 예: prt='prt1001'")
-    if not day:
-        raise ValueError("predict(): day가 비었습니다. 예: day='2025-07-20'")
-
-    if not session_id:
-        session_id = f"sess_{uuid4().hex}"
-
-    global SESSION_STATES
-    created = False
-
-    # 세션 준비
-    if session_id not in SESSION_STATES:
-        state = initial_state(user_text="", dept=dept, rank=rank, shift_type=shift_type, session_id=session_id,)
-        SESSION_STATES[session_id] = state
-        created = True
+    
+     # 프론트가 session_id를 보내면 그 값을 무조건 사용
+    if session_id and session_id.strip():
+        session_id = session_id.strip()
+        print(f"[predict] using client session_id: {session_id}")
     else:
-        state = SESSION_STATES[session_id]
+        now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
+        session_id = f"{prt}_{now_kst.strftime('%Y-%m-%d')}_{now_kst.strftime('%H%M%S')}"
+        print(f"[predict] generated new session_id: {session_id}")
 
-    state.setdefault("meta", {})
-    state["meta"].update({
-        "prt": prt,
-        "day": day,
-        "session_id": session_id,
-    })
+    # 체크포인터 설정 및 그래프 로드
+    config = {"configurable": {"thread_id": session_id}}
+    graph = get_graph()
 
-    # 동의 상태 반영 (버튼 이벤트)
-    if biosignal_consent is not None:
-        prev = state.get("biosignal_consent", "unknown")
-        state["biosignal_consent"] = biosignal_consent
-        if biosignal_consent != prev:
-            state.setdefault("logs", []).append(f"[consent] {prev} -> {biosignal_consent}")
-
-        # 거절인 경우: 그래프를 돌리지 않고, 공감형 인사 멘트만 반환
-        if biosignal_consent == "declined":
-            opening_q = (
-                "경찰관님. 오늘은 어떤 이야기 나눠볼까요?\n"
-                "마음속에 맴도는 감정이나 생각이 있다면, 편하게 말씀해 주세요.\n"
-                "제가 천천히, 그리고 함께 들어드릴게요."
-            )
-            support_suffix = (
-                "\n또는 요즘 마음속에 자주 떠오르는 감정이나 생각이 있다면\n"
-                "그 이야기부터 시작해도 괜찮아요.\n"
-                "괜찮으시다면, 제가 천천히 함께 들어드릴게요."
-            )
-            full_text = opening_q + "\n" + support_suffix
-
-            state["biosignal_done"] = False
-            state.setdefault("logs", []).append("[consent_declined] biosignal skipped")
-
-            SESSION_STATES[session_id] = state
-            return {
-                "replies": [full_text],
-                "created": created,
-                "biosignal_first_emit": False,
-                "prt": prt,
-                "day": day,
-                "session_id": session_id,
-                "records_loaded": 0,
-                "logs": state.get("logs", []),
-                "consent_state": "declined",
-            }
-
-    # 사용자 발화 추가
+    # DB에서 현재 저장된 최신 상태(State) 미리 가져오기 (비교 및 가드용)
+    current_state_snapshot = graph.get_state(config)
+    current_state = current_state_snapshot.values if current_state_snapshot.values else {}
+    if modal_submit:
+        reset_point = len(current_state.get("analyses", []) or [])
+        graph.update_state(config, {"validation_reset_points": [reset_point]})
+        current_state = graph.get_state(config).values or current_state
+    
+    # 3. 입력값(Inputs) 구성 - 기존 상태에 '업데이트'될 내용들
+    resolved_resilience = float(
+        resilience_score if resilience_score is not None else current_state.get("resilience_score", 2.2)
+    )
+    inputs = {
+        "profile": {"dept": dept, "user_rank": user_rank, "shift_type": shift_type},
+        "meta": {"prt": prt, "day": day, "session_id": session_id},
+        "resilience_score": resolved_resilience
+        }
+    
+    # 사용자 메시지 처리
     if user_text and user_text.strip():
-        state["messages"].append(HumanMessage(content=user_text))
+        inputs["messages"] = [HumanMessage(content=user_text)]
+        try:
+            save_chat_message(session_id=session_id, role="human", content=user_text)
+        except Exception as e:
+            print(f"[DB Error] 사용자 메시지 저장 실패: {e}")
+    
+ 
+    has_user_text = bool(user_text and user_text.strip())
 
-    # 4) biosignal 로드 (항상) — 분석 실행 여부는 라우터/가드에서 결정
-    records = []
-    try:
-        records = get_biosignal_records(
-            prt=prt,
-            day=day,
-            collection_type="Automatic",
-            target_hours=12,
-        )
-        state["biosignal"] = records if records else {}
-        if not records:
-            state.setdefault("logs", []).append(
-                f"[biosignal_load] no records for prt={prt}, day={day}"
-            )
-    except Exception as e:
-        state["biosignal"] = {}
-        state.setdefault("logs", []).append(
-            f"[biosignal_load_error] prt={prt}, day={day}, err={e}"
-        )
+    # 동의 상태 업데이트 반영
+    if biosignal_consent is not None:
+        inputs["biosignal_consent"] = biosignal_consent
+        
+    target_consent = biosignal_consent or current_state.get("biosignal_consent", "unknown")
+    # [수정] 재접속에서 동의(accepted) 클릭 시, 빈 텍스트라도 biosignal을 매번 재실행
+    force_biosignal_rerun = bool(
+        modal_submit and (not has_user_text) and (biosignal_consent == "accepted")
+    )
+    if force_biosignal_rerun:
+        inputs["biosignal_done"] = False
+        inputs["biosignal_first_emit"] = False
 
-    # 동의 가드 — 동의 전(unknown)에는 그래프 미실행
-    if state.get("biosignal_consent", "unknown") == "unknown":
-        # 아직 사용자 메시지가 없을 때만 조용히 반환
-        has_user_msg = any(isinstance(m, HumanMessage) for m in state.get("messages", []))
-        if not has_user_msg:
-            SESSION_STATES[session_id] = state
-            return {
-                "replies": [],  # 프론트가 동의 말풍선을 표시
-                "created": created,
-                "biosignal_first_emit": False,
-                "prt": prt,
-                "day": day,
-                "session_id": session_id,
-                "records_loaded": len(records) if isinstance(records, list) else 0,
-                "logs": state.get("logs", []) + ["[guard] waiting_for_consent"],
-                "consent_state": "unknown",
-            }
-
-    # 6) 그래프 캐시 갱신 — 라우터 변경 직후엔 서버 재시작 or 1회만 호출
-    try:
-        get_graph.cache_clear()
-    except Exception:
-        pass
+    # (1) Unknown: 동의 전이면 그래프 실행 없이 즉시 반환
+    if target_consent == "unknown":
+        return {
+            "replies": [],
+            "biosignal_first_emit": False,
+            "prt": prt, "day": day, "session_id": session_id,
+            "consent_state": "unknown",
+            "logs": current_state.get("logs", []) + ["[guard] waiting_for_consent"]
+        }
+        
+     # (2) Declined: 거절 시 공감 멘트 즉시 반환
+    if target_consent == "declined" and (not user_text or not user_text.strip()):
+        opening_q = (
+             "경찰관님. 오늘은 어떤 이야기 나눠볼까요?\n"
+            "마음속에 맴도는 감정이나 생각이 있다면, 편하게 말씀해 주세요.\n"
+            "제가 천천히, 그리고 함께 들어드릴게요."
+          )
+        support_suffix = (
+              "\n또는 요즘 마음속에 자주 떠오르는 감정이나 생각이 있다면\n"
+              "그 이야기부터 시작해도 괜찮아요.\n"
+             "괜찮으시다면, 제가 천천히 함께 들어드릴게요."
+          )
+        full_text = opening_q + "\n" + support_suffix
+        graph.update_state(config, {"biosignal_consent": "declined", "biosignal": {}})
+        return {
+            "replies": [full_text],
+            "biosignal_first_emit": False,
+            "prt": prt, "day": day, "session_id": session_id,
+            "consent_state": "declined",
+            "logs": ["[consent_declined] biosignal skipped"]
+        }
+        
+    # biosignal 로드 (항상) — 분석 실행 여부는 라우터/가드에서 결정
+    records_count = 0
+    if target_consent == "accepted" and (force_biosignal_rerun or (not current_state.get("biosignal"))):
+        try:
+            records = get_biosignal_records(prt=prt, day=day, collection_type="Automatic", target_hours=12)
+            inputs["biosignal"] = records if records else {}
+            records_count = len(records) if isinstance(records, list) else 0
+        except Exception as e:
+            inputs["biosignal"] = {}
+            print(f"[Data Error] 생체 신호 로드 실패: {e}")
+        
 
     # 그래프 실행 전 길이 저장 (이번 턴 델타 추출용)
-    prev_len = len(state["messages"])
+    current_state = graph.get_state(config).values
+    prev_msgs_len = len(current_state.get("messages", []))
 
     # 그래프 실행
-    out = get_graph().invoke(state)
+    out = graph.invoke(inputs, config=config)
 
-    # 이번 턴에 새로 추가된 메시지만 추출
-    new_msgs = out.get("messages", [])[prev_len:]
-    replies = [
-        m.content for m in new_msgs
+    all_msgs = out.get("messages", [])
+    new_ai_msgs = [
+        m.content for m in all_msgs[prev_msgs_len:] 
         if isinstance(m, AIMessage) and getattr(m, "content", None)
     ]
 
-    # 폴백
-    if not replies and out.get("final_replies"):
-        replies = [out["final_replies"][-1]]
-    if not replies:
-        replies = ["(응답 없음)"]
-
-    # 첫 턴 플래그 off (다음 턴 중복 방지)
     was_first = bool(out.get("biosignal_first_emit", False))
+    # 첫 턴 플래그 off (다음 턴 중복 방지)
     if was_first:
-        out["biosignal_first_emit"] = False
+        # 생체분석 첫 턴: 분석 결과 + 오프닝 질문 모두 포함
+        replies = new_ai_msgs 
+        # 다음 턴 중복 방지를 위해 플래그 off
+        graph.update_state(config, {"biosignal_first_emit": False})
+    else:
+        # 일반 대화 턴: 마지막 응답 하나만 선택
+        replies = new_ai_msgs[-1:] if new_ai_msgs else ["(응답 없음)"]
 
-    # 세션 저장
-    SESSION_STATES[session_id] = out
 
     return {
         "replies": replies,
-        "created": created,
         "biosignal_first_emit": was_first,
         "prt": prt,
         "day": day,
         "session_id": session_id,
-        "records_loaded": len(records) if isinstance(records, list) else 0,
+        "records_loaded": records_count,
         "logs": out.get("logs", []),
         "consent_state": out.get("biosignal_consent", "unknown"),
         "plot_path": out.get("biosignal_last", {}).get("plot_path") if was_first else None,
     }
+
