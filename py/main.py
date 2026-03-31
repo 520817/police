@@ -24,9 +24,6 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 
 app = FastAPI()
 
-# 플롯 이미지 서빙
-app.mount("/plots", StaticFiles(directory="plots"), name="plots")
-
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -35,6 +32,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 플롯 이미지 서빙
+app.mount("/plots", StaticFiles(directory="plots"), name="plots")
+
 
 def today_kst():
     return datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")
