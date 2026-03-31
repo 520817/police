@@ -12,7 +12,16 @@ import pandas as pd
 from matplotlib import rcParams
 
 matplotlib.use("Agg")  # 서버 환경에서 GUI 없이 렌더링
-rcParams["font.family"] = "Malgun Gothic"
+# 한글 폰트 설정 (Render Linux 환경)
+font_path = "/tmp/NanumGothic.ttf"
+if not os.path.exists(font_path):
+    urllib.request.urlretrieve(
+        "https://github.com/googlefonts/nanum-fonts/raw/main/fonts/NanumGothic/NanumGothic-Regular.ttf",
+        font_path
+    )
+fm.fontManager.addfont(font_path)
+matplotlib.rc("font", family="NanumGothic")
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 
 def _to_list(seq: Iterable[Any]) -> List[Any]:
