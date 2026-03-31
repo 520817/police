@@ -133,9 +133,6 @@ def make_biosignal_overview_plot(
     save_dir = os.path.join(base_dir, prt, day)
     os.makedirs(save_dir, exist_ok=True)
 
-    plt.rcParams["font.family"] = "Malgun Gothic"
-    plt.rcParams["axes.unicode_minus"] = False
-
     df = pd.DataFrame(valid_signals)
 
     time_col = "time"
