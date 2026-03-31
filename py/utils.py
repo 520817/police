@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
+import urllib.request
 
 matplotlib.use("Agg")  # 서버 환경에서 GUI 없이 렌더링
 # 한글 폰트 설정 (Render Linux 환경)
