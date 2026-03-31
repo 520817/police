@@ -23,7 +23,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph_checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
 
 from pydantic import BaseModel, Field
