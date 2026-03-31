@@ -139,4 +139,3 @@ xarray==2025.11.0
 xgboost==3.1.1
 xxhash==3.5.0
 zstandard==0.24.0
-psycopg-pool==3.2.6
