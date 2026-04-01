@@ -168,9 +168,9 @@ function RatingRow({ number, question, originalText, situation, emotion, value, 
 }
 
 function ValidationStep({ validationData, scores, setScores }) {
-  const peakOriginal = validationData?.peak?.original_text || "오늘 랜덤 발화(직전 AI까지)";
-  const peakSituation = validationData?.peak?.situation || "상황 분석 결과";
-  const peakEmotion = validationData?.peak?.emotion || "감정 분석 결과";
+  const peakOriginal = validationData?.random_turn?.original_text || "오늘 랜덤 발화(직전 AI까지)";
+  const peakSituation = validationData?.random_turn?.situation || "상황 분석 결과";
+  const peakEmotion = validationData?.random_turn?.emotion?.main || "감정 분석 결과";
 
   const lastSituation = validationData?.last?.situation || "마지막 상황 분석 결과";
   const lastEmotion = validationData?.last?.emotion || "마지막 감정 분석 결과";
