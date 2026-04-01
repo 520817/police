@@ -66,6 +66,9 @@ class SurveyInput(BaseModel):
     arousal: int
     vas: int
 
+    validation_q1_text: Optional[str] = None  
+    validation_q2_text: Optional[str] = None  
+    validation_q3_text: Optional[str] = None 
     validation_q1: Optional[int] = None
     validation_q2: Optional[int] = None
     validation_q3: Optional[int] = None
@@ -84,6 +87,9 @@ def save_survey(input: SurveyInput):
             valence=input.valence,
             arousal=input.arousal,
             vas=input.vas,
+            validation_q1_text=input.validation_q1_text,  
+            validation_q2_text=input.validation_q2_text, 
+            validation_q3_text=input.validation_q3_text,
             validation_q1=input.validation_q1,
             validation_q2=input.validation_q2,
             validation_q3=input.validation_q3,
