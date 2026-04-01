@@ -7,6 +7,7 @@ import random
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import numpy as np
 import pandas as pd
 from matplotlib import rcParams
