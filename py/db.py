@@ -14,7 +14,7 @@ def get_db_connection():
         print(f"Connection Error: {e}")
         return None
 
-def save_survey_scores(session_id, score_type, valence, arousal, vas, validation_q1=None, validation_q2=None, validation_q3=None,):
+def save_survey_scores(session_id, score_type, valence, arousal, vas, validation_q1_text=None, validation_q2_text=None, validation_q3_text=None, validation_q1=None, validation_q2=None, validation_q3=None,):
     if not session_id or session_id == "null":
         print("❌ [DB Error] session_id가 유효하지 않습니다.")
         return
@@ -45,7 +45,8 @@ def save_survey_scores(session_id, score_type, valence, arousal, vas, validation
             # 만약 pre 없이 post만 올 경우를 대비해 여기서도 INSERT/UPDATE(UPSERT)를 쓸 수 있음
             sql = """
             UPDATE sessions 
-            SET post_valence=%s, post_arousal=%s, post_vas=%s, post_validation_q1 = %s,
+            SET post_validation_q1_text=%s, post_validation_q2_text=%s, post_validation_q3_text=%s,
+                post_valence=%s, post_arousal=%s, post_vas=%s, post_validation_q1 = %s,
                 post_validation_q2 = %s, post_validation_q3 = %s, post_timestamp=CURRENT_TIMESTAMP 
             WHERE session_id=%s
             """
@@ -53,7 +54,7 @@ def save_survey_scores(session_id, score_type, valence, arousal, vas, validation
             q2 = int(validation_q2) if validation_q2 is not None else 0
             q3 = int(validation_q3) if validation_q3 is not None else 0
             
-            cur.execute(sql, (int(valence), int(arousal), int(vas), q1, q2, q3, session_id))
+            cur.execute(sql, (int(valence), int(arousal), validation_q1_text, validation_q2_text, validation_q3_text, int(vas), q1, q2, q3, session_id))
             
         conn.commit()
         print(f"Survey {score_type} saved for {session_id}")
