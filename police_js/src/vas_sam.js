@@ -249,7 +249,7 @@ function PrecheckModalInner({
 
   const isDataInsufficient = useMemo(() => {
     if (!validationData) return true;
-    const hasPeak = !!validationData.peak?.original_text;
+    const hasPeak = !!validationData.random_turn?.original_text;
     const hasEmotion =
       !!validationData.top_emotions?.[0] &&
       validationData.top_emotions[0] !== "unknown";
