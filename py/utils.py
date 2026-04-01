@@ -17,8 +17,9 @@ matplotlib.use("Agg")  # 서버 환경에서 GUI 없이 렌더링
 font_path = "/tmp/NanumGothic.ttf"
 if not os.path.exists(font_path):
     urllib.request.urlretrieve(
-        "https://github.com/googlefonts/nanum-fonts/raw/main/fonts/NanumGothic/NanumGothic-Regular.ttf",
+        "https://github.com/naver/nanumfont/raw/master/fonts/NanumGothic.ttf",
         font_path
+)
     )
 fm.fontManager.addfont(font_path)
 matplotlib.rc("font", family="NanumGothic")
