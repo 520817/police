@@ -20,7 +20,7 @@ if not os.path.exists(font_path):
         "https://github.com/naver/nanumfont/raw/master/fonts/NanumGothic.ttf",
         font_path
 )
-    )
+    `
 fm.fontManager.addfont(font_path)
 matplotlib.rc("font", family="NanumGothic")
 matplotlib.rcParams["axes.unicode_minus"] = False
