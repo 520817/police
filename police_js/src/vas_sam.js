@@ -311,6 +311,9 @@ function PrecheckModalInner({
         q1: scores.q1,
         q2: scores.q2,
         q3: scores.q3,
+        q1_text: peakSituation + " / " + peakEmotion,  // AI가 분석한 상황+감정
+        q2_text: mainEmotion,                            // AI가 감지한 주요 감정
+        q3_text: lastSituation + " / " + lastEmotion,   // 마지막 상황+감정
       };
       payload.validation_detail = validationData ?? null;
       payload.is_insufficient = isDataInsufficient;
