@@ -307,6 +307,12 @@ function PrecheckModalInner({
     };
 
     if (phase === "post") {
+      const peakSituation = validationData?.random_turn?.situation || "";
+      const peakEmotion = validationData?.random_turn?.emotion?.main || "";
+      const mainEmotion = validationData?.top_emotions?.[0] || "";
+      const lastSituation = validationData?.last?.situation || "";
+      const lastEmotion = validationData?.last?.emotion || "";
+
       payload.validation = {
         q1: scores.q1,
         q2: scores.q2,
