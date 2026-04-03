@@ -56,6 +56,7 @@ class AppState(TypedDict):
     biosignal: Dict[str, Any]
     resilience_score: float    # 회복탄력성 점수
     strategy_guide: str
+    current_stage: Literal["engaging", "evoking", "conclusion"]
 
 
 def initial_state(user_text: str, dept: str, user_rank: str, shift_type: str = "unknown", session_id: str = "", prt: str = "", day: str = "", resilience_score: float =  0.0,) -> AppState:
@@ -76,10 +77,23 @@ def initial_state(user_text: str, dept: str, user_rank: str, shift_type: str = "
         "biosignal": {},
         "resilience_score": resilience_score,
         "strategy_guide": "",
+        "current_stage": "engaging",
 
     }
 
 SESSION_STATES: dict[str, AppState] = {}    # key = session_id
+
+DEFAULT_OPENING_Q = (
+    "경찰관님. 오늘은 어떤 이야기 나눠볼까요?\n"
+    "마음속에 맴도는 감정이나 생각이 있다면, 편하게 말씀해 주세요.\n"
+    "제가 천천히, 그리고 함께 들어드릴게요."
+)
+
+DEFAULT_SUPPORT_SUFFIX = (
+    "\n또는 요즘 마음속에 자주 떠오르는 감정이나 생각이 있다면\n"
+    "그 이야기부터 시작해도 괜찮아요.\n"
+    "괜찮으시다면, 제가 천천히 함께 들어드릴게요."
+)
 
 BIOSIGNAL_ANALYZER_SYS = """\
 너는 생체신호를 해석하는 전문가야. 
@@ -96,7 +110,7 @@ BIOSIGNAL_ANALYZER_SYS = """\
 - opening_question: 생체신호 기반 대화 시작 질문
 
 [데이터 품질 규칙]
-- - 심장박동수(MeanHR)가 40 미만인 경우, 측정 오류 가능성이 있다고 판단한다.
+- 심장박동수(MeanHR)가 40 미만인 경우, 측정 오류 가능성이 있다고 판단한다.
 - 해당 시간대가 분석에 포함된 경우, biosignal_result에서 그 시간대 수치를 단정적으로 해석하지 않는다.
 - biosignal_result에서 "이 시간대는 측정값이 다소 불안정해 정확한 해석이 어려울 수 있어요." 라고 언급한다.
 - biosignal_summary에는 해당 시간대를 신뢰도 낮은 구간으로 명시한다.
@@ -110,11 +124,9 @@ BIOSIGNAL_ANALYZER_SYS = """\
 1. biosignal_result
     [sufficient=True인 경우]
     - 비전공자가 이해하기 쉬운 상담 톤으로 작성한다. 경찰관님이라고 부른다.
-    - 오늘 하루 전반적인 신체 부담 흐름을 1~2문장으로 요약하여 먼저 제시한다. 언제 가장 부담이 컸는지 또는 전반적으로 어떤 흐름이었는지를 오늘 데이터에 맞게 구체적으로 담는다.
-    - 가장 뚜렷한 변화 구간 1~3개만 골라 이모지(🕐 등 시간대 맞는 시계 이모지)로 구분해 한 줄씩 설명한다.
-    - 마지막 문장에 오늘 데이터에서 인상적이거나 주목할 만한 점을 신체 흐름과 연결된 코멘트인 한 문장으로 짚어준다.
-    - 전체 4~5문장 이내로 작성한다. 시간대를 모두 나열하지 않는다.
-    - 마크다운 사용 금지. 각 문단 끝에는 줄바꿈(\\n\\n)으로 구분한다.
+    - 오늘의 신체 부담 흐름을 1~2문장으로 먼저 요약하고, 가장 뚜렷한 변화 구간 1~3개만 이모지(🕐 등 시간대 맞는 시계 이모지)로 구분해 한 줄씩 설명한 뒤, 마지막에 주목할 점 1문장으로 마무리한다.
+    - 전체는 4~5문장 이내로 작성하고 시간대를 모두 나열하지 않는다.
+    - 마크다운은 쓰지 말고, 문단은 줄바꿈(\\n\\n)으로만 구분한다.
 
     [sufficient=False인 경우]
     - 위의 모든 규칙을 무시하고 아래 문장만 정확히 출력한다.
@@ -214,13 +226,9 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     
     # opening_question이 비었을 때도 무난한 한 줄을 먼저 깔아줌
     if not opening_q:
-        opening_q = "경찰관님. 오늘은 어떤 이야기 나눠볼까요?\n 마음속에 맴도는 감정이나 생각이 있다면, 편하게 말씀해 주세요. \n제가 천천히, 그리고 함께 들어드릴게요."
+        opening_q = DEFAULT_OPENING_Q
     
-    support_suffix = (
-        "\n또는 요즘 마음속에 자주 떠오르는 감정이나 생각이 있다면\n"
-        "그 이야기부터 시작해도 괜찮아요.\n"
-        "괜찮으시다면, 제가 천천히 함께 들어드릴게요."
-    )
+    support_suffix = DEFAULT_SUPPORT_SUFFIX
     
     # 한 메시지 안에서 줄바꿈으로 부드럽게 연결
     msg_opening = AIMessage(content=f"{opening_q}\n{support_suffix}".strip())
@@ -262,28 +270,29 @@ ANALYZER_SYS = """\
 - resilience_score: {resilience_score}
 - strategy_guides: {strategy_guides}
 - full_history: {full_history}
+- current_stage: {current_stage}
 
 [분석 원칙]
 - 가장 중요한 일은 현재의 상황과 감정을 해석하는 것이다.
 - 경찰 직무 맥락(사건처리 부담, 민원 응대, 조직 내 관계, 교대근무, 피로 누적, 긴장, 감정 억제 등)은 참고하되 과장하지 않는다.
-- 상황이 불분명할 때는 profile(dept, user_rank, shift_type)과 biosignal를 구체적으로 명시해서 responder가 질문에 녹일 수 있게 한다. 단, profile/biosignal은 발화보다 우선하지 않는다.
-- resilience_score는 응답의 말투·깊이·방향을 결정하는 용도로 참고한다.(3.0 미만 = low, 3.0~4.30 = normal, 4.31 이상 = high)
+- 상황이 불분명하면 profile(dept, user_rank, shift_type)과 biosignal 단서를 thought에 추측으로만 짧게 명시하고, responder가 질문에 자연스럽게 활용할 수 있게 한다. 단, 현재 발화를 항상 우선한다.
+- resilience_score는 대화의 깊이·방향을 결정하는 용도로 참고한다.(3.0 미만 = low, 3.0~4.30 = normal, 4.31 이상 = high)
 - full_history는 대화 흐름 전체를 파악하기 위한 참고 정보다. 현재 발화가 항상 우선한다.
-- 근거가 약하면 unknown으로 둔다. 발화가 짧더라도 full_history에서 유추 가능하면 unknown을 쓰지 않는다.
 
 [thought 작성 규칙]
 thought는 responder에게 전달할 내부 해석 요약이다.
 한 문단으로 짧게 작성하며, 아래 순서대로 자연스럽게 포함한다.
 1. 핵심 상황
 2. 핵심 감정
-3. profile(dept/user_rank/shift_type)과 biosignal에서 유력한 단서를 thought에 반드시 명시한다. 추측임을 밝히되 구체적으로 적는다.
-4. stage 판단과 그 이유
+3. 상황이 불분명할 때만 profile(dept/user_rank/shift_type)과 biosignal의 유력한 단서를 추측임을 밝히고 구체적으로 적는다.
+4. current_stage 유지 또는 전환 판단과 그 이유
 5. 이번 턴에서 responder가 우선해야 할 초점 1개
-    - 상황이 불분명할 때는 3번에서 명시한 단서를 질문에 녹일 수 있도록 구체적으로 지시한다.
-    - strategy_guides를 참고해 현재 판단한 stage와 어긋나는 초점은 절대 포함하지 않는다.
+    - 상황이 불분명할 때는 3번의 단서를 질문에 자연스럽게 녹일 수 있도록 지시한다.
+    - strategy_guides를 참고하되 현재 판단한 stage와 어긋나는 초점은 포함하지 않는다.
+    - engaging은 편하게 꺼내게 하고, evoking은 이미 나온 내용을 더 깊게 풀게 하며, conclusion만 오늘 대화의 핵심 상황 1문장과 핵심 감정 1문장을 정리한 뒤 부담 없는 제안 1개를 허용한다.
     
 [situation]
-- 현재 사용자가 겪는 핵심 문제 상황을 한 문장으로 요약한다.
+- 현재 경찰관이 겪는 핵심 문제 상황을 한 문장으로 요약한다.
 - 현재 발화를 우선하되, full_history로 맥락이 잘린 경우를 보완한다.
 - 경찰 맥락이 자연스럽게 드러나면 반영하되 억지로 넣지 않는다.
 - 발화가 짧더라도 full_history에서 유추 가능하면 unknown을 쓰지 않는다.
@@ -296,20 +305,27 @@ thought는 responder에게 전달할 내부 해석 요약이다.
 - 불확실하면 unknown
 
 [stage]
-- engaging: 공감과 초점화가 우선인 단계
-- evoking: 감정, 생각, 의미를 조금 더 탐색할 수 있는 단계
-- conclusion: 요약이나 작은 다음 행동으로 마무리할 수 있는 단계
+- engaging: 라포를 형성하며 사용자가 자신의 상황과 감정을 편하게 꺼낼 수 있도록 이끌어내는 단계
+- evoking: 이미 나온 상황과 감정을 더 깊고 구체적으로 풀어내며, 사용자가 안전하게 더 표현할 수 있도록 돕는 단계
+- conclusion: 대화가 충분히 진행되어 오늘의 흐름을 정리하고 자연스럽게 마무리할 수 있는 단계
 
 [stage 판단 원칙]
-- stage는 대화 운영을 위한 보조 정보다.
-- full_history 전체 흐름을 기반으로 판단하며, 턴 수만으로 판단하지 않는다.
-- 문제의 명료성, 사용자의 개방성, 감정 표현 정도, 정리 준비도를 함께 본다.
-- resilience가 낮을수록 engaging을 더 길게 유지하고, evoking/conclusion 전환을 보수적으로 판단한다.
-- 애매하면 conclusion보다 engaging 또는 evoking을 우선한다.
-- 예시: 5턴이 지났어도 사용자가 여전히 단답이고 감정 표현이 없으면 engaging 유지.
-- stage 후퇴는 사용자가 새로운 문제를 꺼내거나, 감정이 다시 격해지거나, 명시적으로 더 탐색을 원하는 신호가 있을 때만 허용한다. 단순 거절이나 짧은 부정 발화만으로는 후퇴하지 않는다.
-- 이미 conclusion에 도달한 이후에는 위의 후퇴 조건을 특히 엄격하게 적용한다.
-- 이전 stage보다 낮은 단계로 후퇴할 경우, thought에 후퇴 이유를 반드시 명시한다. 명시 없이 후퇴하는 것은 금지한다.
+- stage는 대화 운영용 보조 정보다. current_stage를 기본으로 두고, full_history 기준으로 지금 responder가 해야 할 일이 더 탐색인지, 더 심화인지, 정리인지 분명할 때만 전환한다.
+- 문제의 명료성, 경찰관의 개방성, 감정 표현 정도, 정리 준비도를 함께 본다.
+- resilience는 단계 전환 기준이 아니라 질문 깊이와 제안 부담을 조절하는 참고값이며, 애매하면 conclusion보다 engaging 또는 evoking을 우선한다.
+- conclusion은 사용자가 오늘 대화를 어느 정도 정리했거나 마칠 의사를 직접 또는 간접적으로 보일 때만 검토한다.
+
+1.전진 조건
+- engaging → evoking: 경찰관이 자신의 상황이나 감정을 어느 정도 드러냈고, 이제는 그 내용을 더 깊고 구체적으로 풀어내도록 돕는 것이 적절할 때.
+- engaging 단계에서 여러 턴에 걸쳐 같은 상황, 대상, 감정 반응이 반복해서 드러나면 더 이상 단순 이끌어내기가 아니라 이미 나온 내용을 깊게 다루는 국면으로 보고 evoking을 우선 검토한다.
+- 사용자가 불편함, 긴장, 답답함, 지루함, 귀찮음처럼 자신의 반응을 반복해서 말하고 있으면 감정이 충분히 드러난 것으로 보고 evoking을 우선 검토한다.
+- evoking → conclusion: 상황과 감정이 충분히 다뤄졌고, 사용자가 "이제 괜찮다", "여기까지", "말하니 좀 낫다", "정리된 것 같다"처럼 정리·마무리 의사를 직접 또는 간접적으로 보일 때만 검토한다. AI가 성급하게 마무리를 유도하는 것은 금지한다.
+2. 후퇴 조건
+- 경찰관이 새로운 문제를 꺼내거나, 대화의 초점이 다시 넓어져 추가 탐색이 필요할 때만 허용한다.
+- 단순 거절이나 짧은 부정 발화만으로는 후퇴하지 않는다.
+- 이미 conclusion에 도달한 이후에는 후퇴 조건을 특히 엄격하게 적용한다.
+- 후퇴할 경우 thought에 후퇴 이유를 반드시 명시한다. 명시 없이 후퇴하는 것은 금지한다.
+- 단순 체념, 피로 호소, 짧은 단답, 해결책 수용 직후의 추가 불만·감정 표현은 conclusion 신호로 보지 말고 기본적으로 evoking을 유지한다.
 
 
 출력 형식(JSON):
@@ -334,7 +350,7 @@ class AnalysisResult(BaseModel):
     thought: str
     situation: str
     emotion: EmotionItem = Field(default_factory=EmotionItem)
-    stage: str = "engaging"
+    stage: Literal["engaging", "evoking", "conclusion"]
 
 def build_full_history(state: AppState, max_msgs: int = 16):
     msgs = state.get("messages", [])
@@ -345,23 +361,10 @@ def create_analyzer_chain(llm):
         [
             ("system", ANALYZER_SYS),
 
-            ("system", "예시1: dept=경비, user_rank=경장, shift_type=night, biosignal_summary=22:00-24:00 긴장 높음, 01:00 이완 감소, resilience_score=2.2"),
-            ("human", "그냥 요즘 좀 힘드네요."),
-            ("ai", """{{
-                "thought": "발화가 짧아 구체적 상황은 불분명하다. 야간 경비 근무라는 profile, 야간 긴장 지속이라는 biosignal이 모두 단서가 될 수 있으나 지금은 어느 쪽이 핵심인지 알 수 없으므로, profile과 biosignal을 모두 가볍게 언급하며 어떤 부분이 힘든지 열어두는 것이 우선이다. resilience_score=2.2로 낮으므로 서두르지 않는다. stage는 engaging.",
-                "situation": "경찰관은 요즘 힘들다고 호소하고 있으나 구체적인 맥락은 아직 불분명하다.",
-                "emotion": {{
-                    "main": "피로",
-                    "sub": "null",
-                    "valence": "negative"
-                }},
-                "stage": "engaging"
-            }}"""),
-
-            ("system", "예시2: dept=형사, user_rank=경사, shift_type=day, biosignal_summary=10:00-14:00 긴장 높음 지속, 16:00 이완 소폭 증가, resilience_score=3.8"),
+            ("system", "예시2: dept=형사과, user_rank=경사, shift_type=day, biosignal_summary=10:00-14:00 긴장 높음 지속, 16:00 이완 소폭 증가, resilience_score=3.8, current_stage=engaging"),
             ("human", "피의자 조사할 때 제가 너무 감정적으로 반응한 것 같아서 계속 마음에 걸려요."),
             ("ai", """{{
-                "thought": "발화에서 조사 중 감정 반응에 대한 후회와 반추가 구체적으로 드러났다. 형사 주간 근무라는 profile과 오전 긴장 지속이라는 biosignal이 이 상황과 자연스럽게 연결된다. full_history에서 상황과 감정이 어느 정도 구체화된 상태이므로 evoking 전환이 적절하다. resilience_score=3.8로 높은 이므로 감정과 생각을 조금 더 탐색해도 무리가 없다. 이번 턴은 그 상황에서 어떤 감정이 올라왔는지 탐색하는 것이 우선이다.",
+                "thought": "조사 중 감정 반응과 그 뒤의 후회가 이미 드러남. 형사과 업무 특성상 감정 통제 압박이 자기비난으로 이어졌을 가능성, 오전 긴장 지속 biosignal도 맥락상 맞물림. 이제는 드러난 경험을 더 깊게 풀 단계라 engaging에서 evoking으로 전환. 이번 초점: 그 순간 올라온 감정과 생각을 더 구체화.",
                 "situation": "경찰관은 피의자 조사 중 자신의 감정 반응이 적절하지 않았다고 느끼며 이를 반추하고 있다.",
                 "emotion": {{
                     "main": "후회",
@@ -371,10 +374,10 @@ def create_analyzer_chain(llm):
                 "stage": "evoking"
             }}"""),
 
-            ("system", "예시3: dept=교통, user_rank=경위, shift_type=day, biosignal_summary=09:00-11:00 긴장 보통, 13:00-15:00 긴장 소폭 증가 후 안정, resilience_score=3.2"),
+            ("system", "예시3: dept=교통, user_rank=경위, shift_type=day, biosignal_summary=09:00-11:00 긴장 보통, 13:00-15:00 긴장 소폭 증가 후 안정, resilience_score=3.2, current_stage=evoking"),
             ("human", "얘기하다 보니까 제가 너무 결과만 보고 있었던 것 같아요. 과정도 봐야 하는데."),
             ("ai", """{{
-                "thought": "발화에서 스스로 사고 패턴의 전환을 언급하며 정리 신호를 보내고 있다. 교통 주간 근무라는 profile이 결과 중심 평가 경향과 자연스럽게 연결되고, biosignal에서 오후 긴장 후 안정된 패턴도 현재 상태와 일치한다. full_history에서 감정과 상황이 충분히 탐색됐으므로 conclusion이 적절하다. 이번 턴은 통찰을 반영하고 작은 실천 하나를 함께 생각해보는 것이 우선이다.",
+                "thought": "결과 중심 사고에서 과정으로 시선이 옮겨가는 통찰이 나옴. 교통 업무의 실적 압박 맥락이 이런 사고 패턴에 영향을 줬을 가능성, 오후 긴장 후 안정 패턴도 현재 정리 국면과 맞물림. 더 탐색하기보다 오늘 대화를 정리할 타이밍이라 evoking에서 conclusion으로 전환. 이번 초점: 통찰을 짧게 요약하고 부담 없는 실천 1개 제안.",
                 "situation": "경찰관은 결과 중심의 사고 패턴을 스스로 인식하고 과정을 함께 보려는 시각의 전환을 이야기하고 있다.",
                 "emotion": {{
                     "main": "안도",
@@ -382,19 +385,6 @@ def create_analyzer_chain(llm):
                     "valence": "positive"
                 }},
                 "stage": "conclusion"
-            }}"""),
-
-            ("system", "예시4: dept=생활안전, user_rank=순경, shift_type=night, biosignal_summary=20:00 긴장 감소 이완 전환, resilience_score=2.5"),
-            ("human", "아 근데 사실 심호흡 같은 거 딱히 필요한 것 같진 않아요."),
-            ("ai", """{{
-                "thought": "이전 턴에서 conclusion으로 전환했으나 사용자가 제안을 수용하지 않고 있어 engaging으로 후퇴한다. 후퇴 이유: 사용자가 제안된 방법을 거절하는 발화를 했고, 이 거절이 단순 선호 차이인지 아니면 아직 정리되지 않은 감정이 있는 건지 확인이 필요하다. biosignal에서 이완 전환이 보이나 발화만으로는 현재 감정 상태를 단정할 수 없다. resilience_score=2.5로 낮은 편이므로 서두르지 않고 사용자의 말 뒤에 있는 감정을 먼저 확인하는 것이 우선이다.",
-                "situation": "경찰관은 제안된 심호흡 방법이 지금 당장 필요하지 않다고 표현하고 있으며, 그 이면의 감정은 아직 불분명하다.",
-                "emotion": {{
-                    "main": "거부감",
-                    "sub": "피로",
-                    "valence": "negative"
-                }},
-                "stage": "engaging"
             }}"""),
 
             MessagesPlaceholder("full_history", optional=True),
@@ -420,6 +410,7 @@ def analyzer_node(state: AppState, analyzer_chain):
     dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
     biosignal_summary = state.get("biosignal_last", {}).get("biosignal_summary", "")
     resilience_score = state.get("resilience_score", 4.5)
+    current_stage = state.get("current_stage", "engaging")
 
     history = build_full_history(state, max_msgs=16)
 
@@ -439,6 +430,7 @@ def analyzer_node(state: AppState, analyzer_chain):
         "resilience_score": state.get("resilience_score", 4.5),
         "full_history": history,
         "strategy_guides": strategy_guides,
+        "current_stage": current_stage,
     })
 
     emotion_item = result.emotion
@@ -506,11 +498,14 @@ def analyzer_node(state: AppState, analyzer_chain):
         "messages": [],
         "logs": new_logs,
         "strategy_guide": strategy_guide,
+        "current_stage": result.stage,
     }
 
 
 RESPONDER_SYS = """\
 너는 경찰관 대상 정서지원 대화 에이전트다.
+경찰 조직과 근무 특성에 대한 이해를 갖고 있지만, 사용자의 현재 발화와 대화 흐름을 최우선으로 해석한다.
+직무 스트레스뿐 아니라 가족, 관계, 건강, 생활, 성격, 일상 피로 같은 직무 밖 어려움도 동등하게 다룬다.
 분석 에이전트가 전달한 thought를 기반으로, 사용자가 편하게 말할 수 있도록 대화를 이끈다.
 발화 범위를 과도하게 확장하거나 단정하지 않으며, 현장감 있는 자연스러운 상담 대화를 유지한다.
 
@@ -520,20 +515,29 @@ RESPONDER_SYS = """\
 - thought: {thought}
 - situation: {situation}
 - emotion: {emotion}
+- stage: {stage}
 - strategy_guide: {strategy_guide}
 
 [핵심 원칙]
 1. thought를 이번 턴의 1순위 실행 지침으로 사용한다.
 2. strategy_guide는 thought를 보강하는 2순위 가이드다. 말투, 질문 깊이, 해결책 제시 방향을 strategy_guide에 맞게 조정한다.
-3. 응답은 공감으로 시작하되, 사용자 말을 그대로 반복하지 않는다. 
-   thought에서 파악한 감정, profile, biosignal이 발화와 연결되는 것을 활용해서 "왜 그렇게 느낄 수 있는지"를 담아 공감하되, biosignal은 수치나 신호명을 직접 언급하지 않고 그 패턴에서 읽히는 감정이나 상태를 사람의 말로 바꿔 녹인다.
-4. 조언/제안은 사용자가 충분히 맥락을 제공했거나 명시적으로 원할 때만 제시한다.
-5. 응답은 실제 대화처럼 간결하게 작성하며, 단락은 1~2개로 구성하고, 문단 사이를 줄바꿈(\n\n)으로 구분한다.
+3. 응답은 공감으로 시작하되, 사용자 말을 그대로 반복하지 않는다.
+   감정 단어만 바꿔 되풀이하지 말고, 사용자의 상황에서 왜 그런 반응이 생길 수 있는지 한 단계 해석해서 짚어준다.
+   thought, profile, biosignal, 경찰 직무 맥락은 현재 발화와 자연스럽게 연결될 때만 활용한다. biosignal은 수치나 신호명을 직접 말하지 말고 사람의 말로 바꿔 녹인다.
+4. 사용자의 어려움이 직무 밖 문제로 보이면 그 주제를 우선 따라간다. 경찰 맥락은 가능한 배경 중 하나로만 가설적으로 제시하고, "~때문이다"처럼 단정하지 말며 현재 발화보다 앞세우지 않는다.
+6. 상투적인 상담 템플릿을 반복하지 않는다. "그럴 수 있겠네요", "특히 어떤 점이", "어떤 감정이 드시나요", "구체적으로 떠오르는 게 있나요" 같은 표현을 습관적으로 반복하지 않는다.
+7. 공감은 사용자가 "내 상황을 알아듣고 있구나"라고 느끼게 해야 한다. 필요하면 현재 발화와 연결되는 배경을 활용할 수 있지만, 특정 맥락으로 섣불리 좁히지 않는다.
+8. 조언/제안은 사용자가 충분히 맥락을 제공했거나 명시적으로 원할 때만 제시한다.
+9. 응답은 실제 대화처럼 간결하게 작성하며, 단락은 1~2개로 구성하고, 문단 사이를 줄바꿈(\n\n)으로 구분한다.
 
 [질문 규칙]
 1. 질문이 필요하면 thought가 가리키는 확인 대상 1개만 묻는다.
 2. strategy_guide의 질문 깊이와 말투 지침을 따른다.
-3. thought가 지지/정리 턴이면 질문 없이 끝날 수 있다.
+3. 질문은 정보 수집용이 아니라 사용자의 속 얘기가 더 나오게 돕는 방향이어야 한다. 이미 나온 감정이나 상황에서 가장 마음에 걸리는 지점, 피하고 싶은 순간, 몸이나 생각의 반응을 한 단계 더 풀게 한다.
+4. 질문은 지나치게 넓거나 템플릿처럼 들리지 않게 하고, 가능하면 사용자가 말한 구체 맥락을 반영하되 그 맥락을 억지로 확대하지 않는다.
+5. 경찰 맥락을 질문에 녹일 때도 단정하지 말고 다른 가능성을 함께 열어둔다.
+6. stage가 engaging 또는 evoking이면 반드시 질문으로 끝낸다.
+7. stage가 conclusion이면 질문으로 끝내지 말고, full_history를 바탕으로 오늘 대화의 핵심 상황을 1문장으로, 그 과정에서 두드러진 감정을 1문장으로 정리한 뒤 부담 없는 제안 1개만 남긴다. 요약은 감정만 추상적으로 말하지 말고 오늘 나온 구체 맥락을 함께 포함한다. 새로운 탐색 질문으로 다시 넓히지 않는다.
 """
 
 def create_responder_chain(llm):
@@ -588,8 +592,8 @@ def responder_node(state: AppState, responder_chain) -> AppState:
     dept = state.get("profile", {}).get("dept", "")
     user_rank = state.get("profile", {}).get("user_rank", "")
     shift_type = state.get("profile", {}).get("shift_type", "")
-
     history = build_full_history(state, max_msgs=16)
+    
 
     thought = analysis.get("thought", "")
 
@@ -603,6 +607,7 @@ def responder_node(state: AppState, responder_chain) -> AppState:
         "thought": thought,
         "strategy_guide": strategy_guide,
         "full_history": history,
+        "stage": stage,
     }
     raw_ai_output: str = responder_chain.invoke(inputs)
     reply_content = raw_ai_output
@@ -767,16 +772,8 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         
      # (2) Declined: 거절 시 공감 멘트 즉시 반환
     if target_consent == "declined" and (not user_text or not user_text.strip()):
-        opening_q = (
-             "경찰관님. 오늘은 어떤 이야기 나눠볼까요?\n"
-            "마음속에 맴도는 감정이나 생각이 있다면, 편하게 말씀해 주세요.\n"
-            "제가 천천히, 그리고 함께 들어드릴게요."
-          )
-        support_suffix = (
-              "\n또는 요즘 마음속에 자주 떠오르는 감정이나 생각이 있다면\n"
-              "그 이야기부터 시작해도 괜찮아요.\n"
-             "괜찮으시다면, 제가 천천히 함께 들어드릴게요."
-          )
+        opening_q = DEFAULT_OPENING_Q
+        support_suffix = DEFAULT_SUPPORT_SUFFIX
         full_text = opening_q + "\n" + support_suffix
         graph.update_state(config, {"biosignal_consent": "declined", "biosignal": {}})
         return {
@@ -835,4 +832,3 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         "consent_state": out.get("biosignal_consent", "unknown"),
         "plot_path": out.get("biosignal_last", {}).get("plot_path") if was_first else None,
     }
-
