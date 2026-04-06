@@ -486,5 +486,3 @@ def get_validation_data(state: dict):
         ],
         "top_emotions": top_3_emotions,
     }
-
-    }
