@@ -42,27 +42,6 @@ def _linebreak_by_sentence(text: str) -> str:
         out_paras.append(s)
     return "\n\n".join(out_paras)
 
-def _normalize_biosignal_result(text: str) -> str:
-    if not text:
-        return ""
-
-    cleaned = text.strip()
-    if "\n\n" in cleaned:
-        return _linebreak_by_sentence(cleaned).strip()
-
-    sentences = [
-        s.strip()
-        for s in re.split(r'(?<=[\.\?\!。！？…])\s+', cleaned)
-        if s.strip()
-    ]
-    if len(sentences) <= 2:
-        return "\n\n".join(sentences).strip()
-
-    first_para = " ".join(sentences[:2]).strip()
-    second_para = "\n".join(sentences[2:]).strip()
-    merged = "\n\n".join(p for p in [first_para, second_para] if p)
-    return _linebreak_by_sentence(merged).strip()
-
 def _to_list(seq: Iterable[Any]) -> List[Any]:
     if seq is None:
         return []
