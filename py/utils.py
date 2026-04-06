@@ -364,48 +364,58 @@ def get_validation_data(state: dict):
 
     if not parsed:
         return {
-            "random_turn": {
-                "original_text": "",
-                "prev_ai_text": "",
-                "situation": "",
-                "emotion": {"main": "", "sub": ""},
-            },
-            "consistency": {
-                "situation_match": 0.0,
-                "emotion_match": 0.0,
-                "overall_match": 0.0,
-            },
+            "random_turns": [
+                {
+                    "original_text": "",
+                    "prev_ai_text": "",
+                    "situation": "",
+                    "emotion": {"main": "", "sub": ""},
+                },
+                {
+                    "original_text": "",
+                    "prev_ai_text": "",
+                    "situation": "",
+                    "emotion": {"main": "", "sub": ""},
+                },
+            ],
             "top_emotions": [],
-            "last": {"original_text": "", "situation": "", "emotion": ""},
         }
 
     valid_items = [x for x in parsed if x["original_text"]] or parsed
-    random_turn = random.choice(valid_items)
-    last_analysis = valid_items[-1]
 
-    def _tokenize_kr_en(text: str) -> set[str]:
-        if not text:
-            return set()
-        return {t for t in re.findall(r"[0-9A-Za-z가-힣]+", text.lower()) if len(t) >= 2}
+    def _is_meaningful_situation(text: str) -> bool:
+        s = (text or "").strip().lower()
+        return bool(s and s not in {"unknown", "null", "none"})
 
-    original_tokens = _tokenize_kr_en(random_turn.get("original_text", ""))
-    situation_tokens = _tokenize_kr_en(random_turn.get("situation", ""))
-    union = original_tokens | situation_tokens
-    inter = original_tokens & situation_tokens
-    situation_match = (len(inter) / len(union)) if union else 0.0
+    def _normalize_situation(text: str) -> str:
+        s = re.sub(r"\s+", " ", (text or "").strip().lower())
+        return re.sub(r"[^\w가-힣]+", "", s)
 
-    emotion_match = 0.0
-    main = (random_turn.get("main") or "").strip().lower()
-    sub = (random_turn.get("sub") or "").strip().lower()
-    user_text_l = (random_turn.get("original_text") or "").lower()
+    preferred_pool = valid_items[max(0, len(valid_items) // 3):] or valid_items
+    preferred_pool = [x for x in preferred_pool if _is_meaningful_situation(x.get("situation", ""))] or preferred_pool
 
-    if main and main in user_text_l:
-        emotion_match += 0.7
-    if sub and sub in user_text_l:
-        emotion_match += 0.3
-    emotion_match = min(1.0, emotion_match)
+    deduped_pool = []
+    seen_situations = set()
+    for item in preferred_pool:
+        key = _normalize_situation(item.get("situation", ""))
+        if key and key in seen_situations:
+            continue
+        if key:
+            seen_situations.add(key)
+        deduped_pool.append(item)
 
-    overall_match = round((situation_match + emotion_match) / 2.0, 2)
+    candidate_pool = deduped_pool or preferred_pool or valid_items
+    sample_size = min(2, len(candidate_pool))
+    sampled_turns = random.sample(candidate_pool, sample_size) if sample_size else []
+
+    while len(sampled_turns) < 2:
+        sampled_turns.append(sampled_turns[0] if sampled_turns else {
+            "original_text": "",
+            "prev_ai_text": "",
+            "situation": "",
+            "main": "",
+            "sub": "",
+        })
 
     emotion_totals: Dict[str, float] = {}
     for item in parsed:
@@ -426,24 +436,19 @@ def get_validation_data(state: dict):
     ]
 
     return {
-        "random_turn": {
-            "original_text": random_turn["original_text"],
-            "prev_ai_text": random_turn.get("prev_ai_text", ""),
-            "situation": random_turn["situation"],
-            "emotion": {
-                "main": random_turn["main"],
-                "sub": random_turn["sub"],
-            },
-        },
-        "consistency": {
-            "situation_match": round(situation_match, 2),
-            "emotion_match": round(emotion_match, 2),
-            "overall_match": overall_match,
-        },
+        "random_turns": [
+            {
+                "original_text": item["original_text"],
+                "prev_ai_text": item.get("prev_ai_text", ""),
+                "situation": item["situation"],
+                "emotion": {
+                    "main": item["main"],
+                    "sub": item["sub"],
+                },
+            }
+            for item in sampled_turns[:2]
+        ],
         "top_emotions": top_3_emotions,
-        "last": {
-            "original_text": last_analysis["original_text"],
-            "situation": last_analysis["situation"],
-            "emotion": last_analysis["main"],
-        },
+    }
+
     }
