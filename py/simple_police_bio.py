@@ -549,22 +549,6 @@ def create_responder_chain(llm):
 
     return prompt | llm | StrOutputParser()
 
-def _linebreak_by_sentence(text: str) -> str:
-    if not text:
-        return text
-    # 문단 단위로 쪼개 보존
-    paras = text.split("\n\n")
-    out_paras = []
-    for p in paras:
-        # 공백 정리
-        s = re.sub(r"[ \t]+", " ", p.strip())
-        # 문장부호(영/중/한) 뒤 공백을 줄바꿈으로
-        s = re.sub(r'(?<=[\.\?\!。！？…])\s+', '\n', s)
-        # 연속 개행 정리
-        s = re.sub(r'\n{3,}', '\n\n', s)
-        out_paras.append(s)
-    return "\n\n".join(out_paras)
-
 def responder_node(state: AppState, responder_chain) -> AppState:
     if not state.get("analyses"):
         state.setdefault("logs", []).append("[Responder] skip: no analyses")
