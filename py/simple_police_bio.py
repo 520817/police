@@ -218,7 +218,8 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
         print(f"[DB Error] Biosignal log save failed: {e}")
 
     # 첫 번째 메시지: 분석 결과
-    msg_result = AIMessage(content=payload["biosignal_result"].strip()) # State["messages"]에 넣으려면 BaseMessage 형태로 되어있어야함
+    biosignal_result_text = normalize_biosignal_result(payload.get("biosignal_result", ""))
+    msg_result = AIMessage(content=biosignal_result_text) # State["messages"]에 넣으려면 BaseMessage 형태로 되어있어야함
 
     
      # 두 번째 메시지: 오프닝 질문(비어있을 수 있으니 .get으로 읽어옴)
@@ -595,7 +596,7 @@ def responder_node(state: AppState, responder_chain) -> AppState:
     }
     raw_ai_output: str = responder_chain.invoke(inputs)
     reply_content = raw_ai_output
-    reply_text = _linebreak_by_sentence(reply_content)
+    reply_text = linebreak_by_sentence(reply_content)
     reply = reply_text.strip()
 
     # db 저장
@@ -816,3 +817,4 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         "consent_state": out.get("biosignal_consent", "unknown"),
         "plot_path": out.get("biosignal_last", {}).get("plot_path") if was_first else None,
     }
+
