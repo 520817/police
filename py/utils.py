@@ -26,6 +26,42 @@ fm.fontManager.addfont(font_path)
 matplotlib.rc("font", family="NanumGothic")
 matplotlib.rcParams["axes.unicode_minus"] = False
 
+def _linebreak_by_sentence(text: str) -> str:
+    if not text:
+        return text
+    # 문단 단위로 쪼개 보존
+    paras = text.split("\n\n")
+    out_paras = []
+    for p in paras:
+        # 공백 정리
+        s = re.sub(r"[ \t]+", " ", p.strip())
+        # 문장부호(영/중/한) 뒤 공백을 줄바꿈으로
+        s = re.sub(r'(?<=[\.\?\!。！？…])\s+', '\n', s)
+        # 연속 개행 정리
+        s = re.sub(r'\n{3,}', '\n\n', s)
+        out_paras.append(s)
+    return "\n\n".join(out_paras)
+
+def _normalize_biosignal_result(text: str) -> str:
+    if not text:
+        return ""
+
+    cleaned = text.strip()
+    if "\n\n" in cleaned:
+        return _linebreak_by_sentence(cleaned).strip()
+
+    sentences = [
+        s.strip()
+        for s in re.split(r'(?<=[\.\?\!。！？…])\s+', cleaned)
+        if s.strip()
+    ]
+    if len(sentences) <= 2:
+        return "\n\n".join(sentences).strip()
+
+    first_para = " ".join(sentences[:2]).strip()
+    second_para = "\n".join(sentences[2:]).strip()
+    merged = "\n\n".join(p for p in [first_para, second_para] if p)
+    return _linebreak_by_sentence(merged).strip()
 
 def _to_list(seq: Iterable[Any]) -> List[Any]:
     if seq is None:
