@@ -191,7 +191,12 @@ def get_validation(session_id: str):
     try:
         validation_data = get_validation_data(state)
 
-        peak_original = (validation_data.get("random_turn", {}).get("original_text") or "").strip()
+        random_turns = validation_data.get("random_turns") or []
+        peak_original = ""
+        for item in random_turns:
+            peak_original = (item.get("original_text") or "").strip()
+            if peak_original:
+                break
         top_emotions = validation_data.get("top_emotions") or []
 
         # 분석 결과 내부가 사실상 비어있는 경우
@@ -217,3 +222,4 @@ def get_validation(session_id: str):
 @app.get("/ping")
 def ping():
     return {"ok": True}
+
