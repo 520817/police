@@ -480,3 +480,13 @@
   display: flex;
   gap: 8px;
 }
+
+.analysisChip--previous-ai {
+  background: #f7f5ef;
+  border-color: #e7dcc0;
+}
+
+.analysisChip--previous-ai .analysisChip__label {
+  background: #efe2bf;
+  color: #7b5a1c;
+}
