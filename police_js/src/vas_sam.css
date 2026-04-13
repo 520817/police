@@ -241,12 +241,14 @@
 
 /* X축(Valence) — 글자 줄만 오른쪽으로 */
 .sam__axisX {
-  width: calc(100% - var(--axisY));
-  margin-top: 10px;
-  margin-left: var(--axisY);
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 8px;
   opacity: 0.55;
   font-size: 12px;
   user-select: none;
@@ -303,11 +305,7 @@
   }
 
   .sam__axisX {
-    width: calc(100% - var(--axisY));
-    margin-top: 6px;
-    margin-left: var(--axisY);
     font-size: 11px;
-    box-sizing: border-box;
   }
 }
 
