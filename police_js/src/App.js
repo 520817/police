@@ -182,7 +182,13 @@ export default function App() {
     setStarting(true);
 
     // 새 시작 시 화면 초기화
-    setMessages([]);
+    setMessages([{
+      id: makeId(),
+      role: "ai",
+      type: "loading",
+      isTyping: false,
+      text: "대화를 준비하고 있습니다. 잠시만 기다려 주세요.",
+    }]);
     setCurrentTypingId(null);
     setIsAiBusy(false);
 
@@ -706,6 +712,7 @@ export default function App() {
           >
             <option value="day">주간</option>
             <option value="night">야간</option>
+            <option value="holiday">휴무</option>
           </select>
 
           {!started ? (
@@ -848,6 +855,7 @@ function Message({
 }) {
   const isCurrentTyping = isTyping && currentTypingId === id;
   const label = role === "user" ? "User" : "AI";
+  const displayText = (text || "").replace(/\\n/g, "\n");
 
   return (
     <div className={role === "user" ? "user-message" : "ai-message"}>
@@ -855,13 +863,13 @@ function Message({
         <b>{label}</b>:{" "}
         {isCurrentTyping ? (
           <Typewriter
-            text={text}
+            text={displayText}
             speed={30}
             onDone={() => onEndTyping(id)}
             onStep={onTypingStep}
           />
         ) : (
-          text
+          displayText
         )}
       </p>
     </div>
