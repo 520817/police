@@ -206,19 +206,19 @@ function ValidationStep({ validationData, scores, setScores }) {
 
       <RatingRow
         number={2}
-        question="이번 세션에서 AI가 가장 많이 감지한 주된 감정이 실제와 얼마나 맞았나요?"
-        emotion={mainEmotion}
+        question="다음 대화 장면에 대한 AI의 상황·감정 해석이 실제와 얼마나 맞았나요?"
+        prevAiText={turn2.prev_ai_text || ""}
+        originalText={turn2.original_text || "오늘 대화 장면 2"}
+        situation={turn2.situation || "상황 분석 결과"}
+        emotion={turn2.emotion?.main || "감정 분석 결과"}
         value={scores.q2}
         onChange={(v) => setScores((prev) => ({ ...prev, q2: v }))}
       />
 
       <RatingRow
         number={3}
-        question="다음 대화 장면에 대한 AI의 상황·감정 해석이 실제와 얼마나 맞았나요?"
-        prevAiText={turn2.prev_ai_text || ""}
-        originalText={turn2.original_text || "오늘 대화 장면 2"}
-        situation={turn2.situation || "상황 분석 결과"}
-        emotion={turn2.emotion?.main || "감정 분석 결과"}
+        question="이번 세션에서 AI가 가장 많이 감지한 주된 감정이 실제와 얼마나 맞았나요?"
+        emotion={mainEmotion}
         value={scores.q3}
         onChange={(v) => setScores((prev) => ({ ...prev, q3: v }))}
       />
@@ -338,8 +338,8 @@ function PrecheckModalInner({
         q2: scores.q2,
         q3: scores.q3,
         q1_text: formatTurnValidationText("random_turn_1", turn1),
-        q2_text: `type=main_emotion | emotion=${cleanText(mainEmotion)}`,
-        q3_text: formatTurnValidationText("random_turn_2", turn2),
+        q2_text: formatTurnValidationText("random_turn_2", turn2),
+        q3_text: `type=main_emotion | emotion=${cleanText(mainEmotion)}`,
       };
       payload.validation_detail = validationData ?? null;
       payload.is_insufficient = isDataInsufficient;
