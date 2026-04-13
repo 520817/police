@@ -26,22 +26,6 @@ fm.fontManager.addfont(font_path)
 matplotlib.rc("font", family="NanumGothic")
 matplotlib.rcParams["axes.unicode_minus"] = False
 
-def _linebreak_by_sentence(text: str) -> str:
-    if not text:
-        return text
-    # 문단 단위로 쪼개 보존
-    paras = text.split("\n\n")
-    out_paras = []
-    for p in paras:
-        # 공백 정리
-        s = re.sub(r"[ \t]+", " ", p.strip())
-        # 문장부호(영/중/한) 뒤 공백을 줄바꿈으로
-        s = re.sub(r'(?<=[\.\?\!。！？…])\s+', '\n', s)
-        # 연속 개행 정리
-        s = re.sub(r'\n{3,}', '\n\n', s)
-        out_paras.append(s)
-    return "\n\n".join(out_paras)
-
 def _to_list(seq: Iterable[Any]) -> List[Any]:
     if seq is None:
         return []
@@ -79,6 +63,51 @@ def remove_ppg_prefix(obj):
     return obj
 
 
+def linebreak_by_sentence(text: str) -> str:
+    if not text:
+        return text
+    paras = text.split("\n\n")
+    out_paras = []
+    for p in paras:
+        s = re.sub(r"[ \t]+", " ", p.strip())
+        s = re.sub(r'(?<=[\.\?\!。！？…])\s+', "\n", s)
+        s = re.sub(r"\n{3,}", "\n\n", s)
+        out_paras.append(s)
+    return "\n\n".join(out_paras)
+
+
+def normalize_stage_transition(
+    current_stage: str,
+    proposed_stage: str,
+    analyzed_turn_count: int = 0,
+) -> str:
+    current = str(current_stage or "engaging").strip().lower()
+    proposed = str(proposed_stage or current or "engaging").strip().lower()
+    valid = {"engaging", "evoking", "conclusion"}
+    if current not in valid:
+        current = "engaging"
+    if proposed not in valid:
+        proposed = current
+    try:
+        analyzed_turn_count = int(analyzed_turn_count)
+    except Exception:
+        analyzed_turn_count = 0
+
+    stage_order = ["engaging", "evoking", "conclusion"]
+    current_idx = stage_order.index(current)
+    proposed_idx = stage_order.index(proposed)
+
+    # 두 단계 이상 건너뛰기 금지 (engaging → conclusion 직행 포함)
+    if proposed_idx - current_idx > 1:
+        return stage_order[current_idx + 1]
+
+    # conclusion에서 후퇴 금지
+    if current == "conclusion" and proposed_idx < current_idx:
+        return "conclusion"
+
+    return proposed
+
+
 def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
     """
     time 컬럼의 'HH:MM' 또는 'YYYY-MM-DD HH:MM' 문자열을 datetime으로 변환한다.
@@ -110,32 +139,29 @@ def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
     return time_series.apply(parse_one)
 
 
-def make_strategy_guide(resilience_score: float, stage: str = "engaging") -> str:
-    """
-    회복탄력성 점수와 대화 단계에 따라 응답 전략 가이드를 만든다.
-    """
+def make_strategy_guide(resilience_score: float) -> str:
     try:
         s = float(resilience_score)
     except Exception:
         s = 4.5
     s = max(0.0, min(10.0, s))
-    band = "low" if s < 3.0 else "mid"
-
-    stage_guide = {
-        "low": {
-            "engaging": "지금은 속도를 낮추고 공감 중심으로 반응하세요. 한 번에 질문은 하나만 하고, 사용자가 스스로 말할 여지를 충분히 둡니다.",
-            "evoking": "감정을 단정하지 말고 열린 질문으로 확인하세요. 원인 탐색보다 현재 느낌을 안전하게 말하게 하는 데 집중합니다.",
-            "conclusion": "정리는 짧고 부드럽게 끝내세요. 실천 제안은 아주 작고 부담 없는 수준으로 1개만 제시합니다.",
-        },
-        "mid": {
-            "engaging": "공감으로 시작하되 핵심 맥락을 빠르게 확인하세요. 현재 상황을 한 문장으로 반영한 뒤 짧은 질문을 덧붙입니다.",
-            "evoking": "감정-상황 연결을 구체화하도록 돕습니다. 필요하면 한 단계 더 깊은 질문으로 생각의 흐름을 정리합니다.",
-            "conclusion": "대화에서 얻은 점을 간단히 요약하고 다음 행동 한 가지를 합의합니다. 과도한 조언은 피합니다.",
-        },
+    
+    band = "low" if s < 3.0 else "mid/high"
+    
+    guide = {
+        "low": (
+            "감정을 빠르게 자극하지 않는다. "
+            "한 번에 많은 것을 꺼내게 하지 않는다. "
+            "먼저 안전하게 말할 수 있는 분위기를 만든다. "
+            "사고 재구성이나 다른 시각 제안은 충분히 대화가 쌓인 뒤에 시도한다."
+        ),
+        "mid/high": (
+            "감정을 좀 더 직접적으로 건드려도 된다. "
+            "다른 시각이나 사고 재구성을 자연스럽게 시도할 수 있다."
+),
     }
-
-    guide = stage_guide[band].get(stage, stage_guide[band]["engaging"])
-    return f"[resilience_band:{band} score={s:.2f}] [stage:{stage}]\n{guide}"
+    
+    return f"[resilience_band:{band} score={s:.2f}]\n{guide[band]}"
 
 
 def make_biosignal_overview_plot(
@@ -151,12 +177,14 @@ def make_biosignal_overview_plot(
     save_dir = os.path.join(base_dir, prt, day)
     os.makedirs(save_dir, exist_ok=True)
 
+    plt.rcParams["font.family"] = "Malgun Gothic"
+    plt.rcParams["axes.unicode_minus"] = False
+
     df = pd.DataFrame(valid_signals)
 
     time_col = "time"
     hr_col = "MeanHR" if "MeanHR" in df.columns else "PPG_MeanHR"
-    lfn_col = "LFn" if "LFn" in df.columns else "PPG_LFn"
-    hfn_col = "HFn" if "HFn" in df.columns else "PPG_HFn"
+    stress_col = "Stress"
 
     if time_col not in df.columns:
         return None
@@ -164,7 +192,7 @@ def make_biosignal_overview_plot(
     if df.empty:
         return None
 
-    for c in [lfn_col, hfn_col, hr_col]:
+    for c in [stress_col, hr_col]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
         else:
@@ -202,44 +230,34 @@ def make_biosignal_overview_plot(
 
     times = slots.strftime("%H").tolist()
     x_idx = np.arange(len(slots))
-    lfn = df[lfn_col].to_numpy(dtype=float) if lfn_col in df.columns else np.full(len(slots), np.nan)
-    hfn = df[hfn_col].to_numpy(dtype=float) if hfn_col in df.columns else np.full(len(slots), np.nan)
+    stress = df[stress_col].to_numpy(dtype=float) if stress_col in df.columns else np.full(len(slots), np.nan)
     hr = df[hr_col].to_numpy(dtype=float) if hr_col in df.columns else np.full(len(slots), np.nan)
 
-    valid_mask = np.isfinite(lfn) | np.isfinite(hfn) | np.isfinite(hr)
+    valid_mask = np.isfinite(stress) | np.isfinite(hr)
     if int(valid_mask.sum()) < 6:
         return None
 
-    valid_lfn = np.where(np.isfinite(lfn), lfn, 0)
-    valid_hfn = np.where(np.isfinite(hfn), hfn, 0)
+    bar_colors = np.where(stress == 1, "#ef5350", "#42a5f5")
 
     fig, ax1 = plt.subplots(figsize=(8, 5), dpi=120)
     fig.patch.set_facecolor("#fafafa")
     ax1.set_facecolor("#fafafa")
     ax1.grid(False)
 
-    ax1.bar(
-        x_idx,
-        valid_lfn,
-        width=0.8,
-        color="#ef5350",
-        alpha=0.35,
-        label="긴장",
-        zorder=1,
-    )
-    ax1.bar(
-        x_idx,
-        valid_hfn,
-        width=0.8,
-        bottom=valid_lfn,
-        color="#42a5f5",
-        alpha=0.35,
-        label="이완",
-        zorder=1,
-    )
-    ax1.set_ylim(bottom=0, top=1.0)
+    for xi, has_data, color in zip(x_idx, np.isfinite(stress), bar_colors):
+        if has_data:
+            ax1.bar(xi, 1, width=0.8, color=color, alpha=0.5, zorder=1)
+
+    legend_patches = [
+        Patch(facecolor="#ef5350", alpha=0.5, label="스트레스"),
+        Patch(facecolor="#42a5f5", alpha=0.5, label="안정"),
+    ]
+
+    ax1.set_ylim(bottom=0, top=1.2)
+    ax1.set_yticks([])
+    ax1.set_yticklabels("")
     ax1.set_xlabel("시간", fontsize=13, color="#222222")
-    ax1.set_ylabel("긴장/이완 비율", fontsize=13, color="#222222")
+    ax1.set_ylabel("스트레스 여부", fontsize=13, color="#222222")
 
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
@@ -297,13 +315,12 @@ def make_biosignal_overview_plot(
         hr_max = np.nanmax(hr_valid)
         ax2.set_ylim(bottom=max(0, hr_min - 15), top=hr_max + 20)
 
-        handles1, labels1 = ax1.get_legend_handles_labels()
         handles2, labels2 = ax2.get_legend_handles_labels()
         ax1.legend(
-            handles1 + handles2,
-            labels1 + labels2,
+            legend_patches + handles2,
+            [p.get_label() for p in legend_patches] + labels2,
             loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
+            bbox_to_anchor=(0.5, -0.12),
             ncol=3,
             fontsize=11,
             framealpha=0.0,
@@ -311,8 +328,9 @@ def make_biosignal_overview_plot(
         )
     else:
         ax1.legend(
+            handles=legend_patches,
             loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
+            bbox_to_anchor=(0.5, -0.12),
             ncol=3,
             fontsize=12,
             framealpha=0.0,
@@ -325,7 +343,13 @@ def make_biosignal_overview_plot(
     plt.title("시간대별 생체신호", fontsize=14, fontweight="bold", color="#222222", pad=14)
 
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.18)
+    fig.subplots_adjust(bottom=0.22)
+
+    fig.text(
+        0.5, 0.02,
+        "* 스트레스/안정 구분은 심박수 외 여러 HRV 지표를 종합해 판단합니다.",
+        ha="center", fontsize=11, color="#666666",
+    )
 
     sid = session_id or "nosess"
     img_name = f"biosignal_{sid}_{uuid.uuid4().hex[:8]}.png"
@@ -334,7 +358,6 @@ def make_biosignal_overview_plot(
     plt.close(fig)
 
     return f"/plots/{prt}/{day}/{img_name}"
-
 
 def get_validation_data(state: dict):
     analyses_raw = state.get("analyses", []) or []
@@ -377,22 +400,9 @@ def get_validation_data(state: dict):
             print("analysis parse error:", e)
             print("failed raw analysis:", a)
 
-    if not parsed:
+    if len(parsed) < 3:
         return {
-            "random_turns": [
-                {
-                    "original_text": "",
-                    "prev_ai_text": "",
-                    "situation": "",
-                    "emotion": {"main": "", "sub": ""},
-                },
-                {
-                    "original_text": "",
-                    "prev_ai_text": "",
-                    "situation": "",
-                    "emotion": {"main": "", "sub": ""},
-                },
-            ],
+            "random_turns": [],
             "top_emotions": [],
         }
 
@@ -462,6 +472,10 @@ def get_validation_data(state: dict):
                 },
             }
             for item in sampled_turns[:2]
+        ],
+        "top_emotions": top_3_emotions,
+    }
+
         ],
         "top_emotions": top_3_emotions,
     }
