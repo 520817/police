@@ -138,32 +138,6 @@ def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
 
     return time_series.apply(parse_one)
 
-
-def make_strategy_guide(resilience_score: float) -> str:
-    try:
-        s = float(resilience_score)
-    except Exception:
-        s = 4.5
-    s = max(0.0, min(10.0, s))
-    
-    band = "low" if s < 3.0 else "mid/high"
-    
-    guide = {
-        "low": (
-            "감정을 빠르게 자극하지 않는다. "
-            "한 번에 많은 것을 꺼내게 하지 않는다. "
-            "먼저 안전하게 말할 수 있는 분위기를 만든다. "
-            "사고 재구성이나 다른 시각 제안은 충분히 대화가 쌓인 뒤에 시도한다."
-        ),
-        "mid/high": (
-            "감정을 좀 더 직접적으로 건드려도 된다. "
-            "다른 시각이나 사고 재구성을 자연스럽게 시도할 수 있다."
-),
-    }
-    
-    return f"[resilience_band:{band} score={s:.2f}]\n{guide[band]}"
-
-
 def make_biosignal_overview_plot(
     valid_signals,
     session_id: str | None,
