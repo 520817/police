@@ -48,11 +48,15 @@ function SamCircle({
 
       <div className="sam__wrap">
         <div className="sam__axisY" style={{ height: size }} aria-hidden="true">
-          <div className="sam__axisYTop">에너지 높음</div>
-          <div className="sam__axisYBot">에너지 낮음</div>
+          <div className="sam__axisYTop">에너지<br/>높음</div>
+          <div className="sam__axisYBot">에너지<br/>낮음</div>
         </div>
 
-        <div className="sam__stage" style={{ width: size, height: size }}>
+        <div className="sam__stage" style={{ width: size, height: size, position: "relative" }}>
+          <div className="sam__axisX" aria-hidden="true">
+            <span className="sam__axisXLeft">부정적</span>
+            <span className="sam__axisXRight">긍정적</span>
+          </div>
           {points.map(({ key, img, x, y }) => {
             const isCenter = key === 5;
             const faceSize = isCenter ? faceSizeCenter : faceSizeOuter;
@@ -83,11 +87,6 @@ function SamCircle({
             );
           })}
         </div>
-      </div>
-
-      <div className="sam__axisX" aria-hidden="true">
-        <span className="sam__axisXLeft">부정적</span>
-        <span className="sam__axisXRight">긍정적</span>
       </div>
     </div>
   );
