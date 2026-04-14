@@ -381,7 +381,7 @@
   }
 
   .ratingBtn {
-    min-width: 38px;
+    min-width: 0;
     height: 38px;
   }
 }
@@ -458,22 +458,28 @@
 .ratingInlineScale {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
   margin-top: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .ratingInlineScale__label {
-  font-size: 13px;
+  font-size: 12px;
   color: #777;
   font-weight: 400;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ratingRow__buttons {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex: 1;
+}
+
+.ratingRow__buttons .ratingBtn {
+  flex: 1;
+  min-width: 0;
 }
 
 .analysisChip--previous-ai {
