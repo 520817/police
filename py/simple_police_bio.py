@@ -219,15 +219,6 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     })
     payload = result.model_dump()
 
-    try:
-        save_biosignal_log(
-            session_id=state["meta"]["session_id"],
-            biosignal_summary=payload.get("biosignal_summary", ""),
-            valid_record_count=valid_record_count
-        )
-    except Exception as e:
-        print(f"[DB Error] Biosignal log save failed: {e}")
-
     biosignal_result_text = (payload.get("biosignal_result") or "").strip()
     msg_result = AIMessage(content=biosignal_result_text, name="biosignal")
 
@@ -248,6 +239,18 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             valid_signals=valid_signals,
             session_id=sid, prt=prt, day=day,
         )
+
+    try:
+        save_biosignal_log(
+            session_id=state["meta"]["session_id"],
+            biosignal_result=payload.get("biosignal_result", ""),
+            biosignal_summary=payload.get("biosignal_summary", ""),
+            opening_question=payload.get("opening_question", ""),
+            valid_record_count=valid_record_count,
+            plot_path=plot_path,
+        )
+    except Exception as e:
+        print(f"[DB Error] Biosignal log save failed: {e}")
 
     return {
         "biosignal_done": True,
@@ -888,5 +891,3 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         "consent_state": out.get("biosignal_consent", "unknown"),
         "plot_path": out.get("biosignal_last", {}).get("plot_path") if was_first else None,
     }
-
-
