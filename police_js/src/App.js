@@ -39,7 +39,7 @@ function ImageMessageBubble({ src }) {
   return (
     <div className="ai-message">
       <div className="bio-plot-wrapper">
-        <b>AI</b>:
+        <div className="ai-label">K폴담</div>
         <div className="bio-plot-box">
           <img
             src={src}
@@ -139,6 +139,17 @@ export default function App() {
       localStorage.removeItem("session_day");
     }
   }, []);
+
+  // 대화 중 페이지 이탈 경고
+  useEffect(() => {
+    const handler = (e) => {
+      if (!started || consentState === "ended") return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [started, consentState]);
 
   // 전화번호 제출
   const handlePhoneSubmit = () => {
@@ -567,6 +578,10 @@ export default function App() {
                 validation_q1: payload.validation?.q1 ?? null,
                 validation_q2: payload.validation?.q2 ?? null,
                 validation_q3: payload.validation?.q3 ?? null,
+                validation_q1_text: payload.validation?.q1_text ?? null,
+                validation_q2_text: payload.validation?.q2_text ?? null,
+                validation_q3_text: payload.validation?.q3_text ?? null,
+                is_insufficient: payload.is_insufficient ?? null,
               }),
             });
 
@@ -659,71 +674,70 @@ export default function App() {
 
       <div className="chat-box">
         <div className="chat-header">
-          <h1>경찰관 전용 AI 챗봇</h1>
+          <h1>
+            <span className="header-sub">경찰의 마음을 귀담아듣는,</span>
+            <span className="header-main">K폴담</span>
+          </h1>
           <div className="logo-group">
             <img src="/images/police.PNG" alt="경찰청 로고" className="chat-logo" />
             <img src="/images/kist.PNG" alt="키스트 로고" className="chat-logo" />
           </div>
         </div>
 
-        {/* 프로필 입력 라인 */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <input
-            placeholder="부서 (예: 형사과, 교통과)"
-            value={dept}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDept(v);
-              localStorage.setItem("dept", v);
-            }}
-            className="message-input"
-            disabled={started || pendingEnd}
-          />
-          <input
-            placeholder="계급 (예: 순경, 경위)"
-            value={userRank}
-            onChange={(e) => {
-              const v = e.target.value;
-              setUserRank(v);
-              localStorage.setItem("user_rank", v);
-            }}
-            className="message-input rank-input"
-            disabled={started || pendingEnd}
-          />
-          <select
-            value={shiftType}
-            onChange={(e) => {
-              const v = e.target.value;
-              setShiftType(v);
-              localStorage.setItem("shift_type", v);
-            }}
-            className="message-input shift-input"
-            disabled={started || pendingEnd}
-            style={{ minWidth: 140 }}
-            aria-label="근무타입"
-            title="근무타입"
-          >
-            <option value="day">주간</option>
-            <option value="night">야간</option>
-            <option value="holiday">휴무</option>
-          </select>
-
-          {!started ? (
+        {/* 프로필 입력 라인: 대화 시작 전만 표시 */}
+        {!started && (
+          <div className="profile-row">
+            <input
+              placeholder="부서 (예: 형사과, 교통과)"
+              value={dept}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDept(v);
+                localStorage.setItem("dept", v);
+              }}
+              className="message-input dept-input"
+              disabled={pendingEnd}
+            />
+            <input
+              placeholder="계급 (예: 순경, 경위)"
+              value={userRank}
+              onChange={(e) => {
+                const v = e.target.value;
+                setUserRank(v);
+                localStorage.setItem("user_rank", v);
+              }}
+              className="message-input rank-input"
+              disabled={pendingEnd}
+            />
+            <select
+              value={shiftType}
+              onChange={(e) => {
+                const v = e.target.value;
+                setShiftType(v);
+                localStorage.setItem("shift_type", v);
+              }}
+              className="message-input shift-input"
+              disabled={pendingEnd}
+              aria-label="근무타입"
+              title="근무타입"
+            >
+              <option value="day">주간</option>
+              <option value="night">야간</option>
+              <option value="holiday">휴무</option>
+            </select>
             <button
-              className="send-button"
+              className="send-button start-button"
               onClick={handleStart}
               disabled={starting || !dept || !userRank || !userId}
             >
               대화 시작
             </button>
-          ) : (
+          </div>
+        )}
+
+        {/* 대화 중: 종료 버튼만 오른쪽 정렬 */}
+        {started && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
             <button
               className="send-button end-button"
               onClick={handleEndConversation}
@@ -731,8 +745,8 @@ export default function App() {
             >
               대화 종료
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         <MessageList
           messages={messages}
@@ -854,13 +868,12 @@ function Message({
   onTypingStep,
 }) {
   const isCurrentTyping = isTyping && currentTypingId === id;
-  const label = role === "user" ? "User" : "AI";
   const displayText = (text || "").replace(/\\n/g, "\n");
 
   return (
     <div className={role === "user" ? "user-message" : "ai-message"}>
+      {role === "ai" && <div className="ai-label">K폴담</div>}
       <p style={{ whiteSpace: "pre-wrap" }}>
-        <b>{label}</b>:{" "}
         {isCurrentTyping ? (
           <Typewriter
             text={displayText}
