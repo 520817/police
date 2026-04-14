@@ -22,9 +22,8 @@ if not os.path.exists(font_path):
         "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
         font_path
     )
-    
 fm.fontManager.addfont(font_path)
-matplotlib.rc("font", family="NanumGothic")
+matplotlib.rc("font", family="NanumGothic")  # 이 줄 추가
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 def _to_list(seq: Iterable[Any]) -> List[Any]:
@@ -151,10 +150,7 @@ def make_biosignal_overview_plot(
 
     save_dir = os.path.join(base_dir, prt, day)
     os.makedirs(save_dir, exist_ok=True)
-
-    plt.rcParams["font.family"] = "Malgun Gothic"
-    plt.rcParams["axes.unicode_minus"] = False
-
+    
     df = pd.DataFrame(valid_signals)
 
     time_col = "time"
