@@ -55,6 +55,22 @@ body {
 .chat-header h1 {
   margin: 0;
   font-size: 18px;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.header-sub {
+  font-size: 13px;
+  font-weight: 400;
+  color: #888;
+}
+
+.header-main {
+  font-size: 18px;
+  font-weight: 800;
+  color: #222;
 }
 
 .logo-group {
@@ -202,7 +218,7 @@ body {
 
 /* ====== Message bubbles ====== */
 .user-message, .ai-message {
-  font-size: 16px;
+  font-size: 1rem;
   margin: 6px 0;
   padding: 8px 10px;
   border-radius: 10px;
@@ -219,6 +235,13 @@ body {
   background: #f1f5f9;
   margin-right: auto;
   white-space: pre-line;
+}
+
+.ai-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 3px;
+  font-weight: 500;
 }
 
 .ai-message p, .user-message p {
@@ -266,7 +289,7 @@ body {
   .rank-input { grid-column: 1 / 2; }
   .shift-input { grid-column: 2 / 3; }
 
-  .user-message, .ai-message { font-size: 15px; max-width: 92%; }
+  .user-message, .ai-message { font-size: 0.9375rem; max-width: 92%; }
 }
 
 .chat-box--hidden {
