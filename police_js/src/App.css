@@ -223,7 +223,14 @@ body {
   padding: 8px 10px;
   border-radius: 10px;
   line-height: 1.4;
-  max-width: 85%;
+}
+
+.ai-message {
+  max-width: 88%;
+}
+
+.user-message {
+  max-width: 72%;
 }
 
 .user-message {
@@ -289,7 +296,9 @@ body {
   .rank-input { grid-column: 1 / 2; }
   .shift-input { grid-column: 2 / 3; }
 
-  .user-message, .ai-message { font-size: 0.9375rem; max-width: 92%; }
+  .user-message, .ai-message { font-size: 0.9375rem; }
+  .ai-message { max-width: 95%; }
+  .user-message { max-width: 78%; }
 }
 
 .chat-box--hidden {
