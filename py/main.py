@@ -72,6 +72,7 @@ class SurveyInput(BaseModel):
     validation_q1: Optional[int] = None
     validation_q2: Optional[int] = None
     validation_q3: Optional[int] = None
+    is_insufficient: Optional[bool] = None
 
 @app.post("/survey")
 def save_survey(input: SurveyInput):
@@ -93,6 +94,7 @@ def save_survey(input: SurveyInput):
             validation_q1=input.validation_q1,
             validation_q2=input.validation_q2,
             validation_q3=input.validation_q3,
+            is_insufficient=input.is_insufficient,
         )
 
         return {"status": "success", "message": f"{input.score_type} survey saved."}
@@ -222,5 +224,3 @@ def get_validation(session_id: str):
 @app.get("/ping")
 def ping():
     return {"ok": True}
-
-
