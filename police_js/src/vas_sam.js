@@ -267,15 +267,22 @@ function PrecheckModalInner({
     return !hasTurn || !hasEmotion;
   }, [validationData]);
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth <= 480;
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 390
+  );
+  useEffect(() => {
+    const handler = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  const isMobile = windowWidth <= 480;
   const samSize = useMemo(() => {
-    if (typeof window === "undefined") return 320;
-    const vw = window.innerWidth;
     const max = 380;
     const min = 240;
-    const s = Math.floor(vw * (isMobile ? 0.78 : 0.62));
+    const s = Math.floor(windowWidth * (isMobile ? 0.78 : 0.62));
     return Math.max(min, Math.min(max, s));
-  }, [isMobile]);
+  }, [windowWidth, isMobile]);
 
   const faceOuter = Math.round(samSize * 0.18);
   const faceCenter = Math.round(samSize * 0.19);
