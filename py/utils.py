@@ -138,6 +138,7 @@ def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
 
     return time_series.apply(parse_one)
 
+
 def make_biosignal_overview_plot(
     valid_signals,
     session_id: str | None,
@@ -150,7 +151,7 @@ def make_biosignal_overview_plot(
 
     save_dir = os.path.join(base_dir, prt, day)
     os.makedirs(save_dir, exist_ok=True)
-    
+
     df = pd.DataFrame(valid_signals)
 
     time_col = "time"
@@ -210,7 +211,7 @@ def make_biosignal_overview_plot(
 
     bar_colors = np.where(stress == 1, "#ef5350", "#42a5f5")
 
-    fig, ax1 = plt.subplots(figsize=(8, 5), dpi=120)
+    fig, ax1 = plt.subplots(figsize=(8, 5.5), dpi=130)
     fig.patch.set_facecolor("#fafafa")
     ax1.set_facecolor("#fafafa")
     ax1.grid(False)
@@ -227,15 +228,15 @@ def make_biosignal_overview_plot(
     ax1.set_ylim(bottom=0, top=1.2)
     ax1.set_yticks([])
     ax1.set_yticklabels("")
-    ax1.set_xlabel("시간", fontsize=13, color="#222222")
-    ax1.set_ylabel("스트레스 여부", fontsize=13, color="#222222")
+    ax1.set_xlabel("시간", fontsize=14, color="#222222")
+    ax1.set_ylabel("스트레스 여부", fontsize=14, color="#222222")
 
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
     ax1.spines["left"].set_color("#aaaaaa")
     ax1.spines["bottom"].set_color("#aaaaaa")
-    ax1.tick_params(axis="y", labelsize=11, colors="#222222")
-    ax1.tick_params(axis="x", labelsize=11, colors="#222222")
+    ax1.tick_params(axis="y", labelsize=13, colors="#222222")
+    ax1.tick_params(axis="x", labelsize=13, colors="#222222")
 
     ax2 = None
     if np.isfinite(hr).any():
@@ -267,15 +268,15 @@ def make_biosignal_overview_plot(
                 xy=(xi, yi),
                 xytext=(0, 10),
                 textcoords="offset points",
-                fontsize=10,
+                fontsize=15,
                 color="#c62828",
                 ha="center",
                 va="bottom",
                 fontweight="bold",
             )
 
-        ax2.set_ylabel("심박수(bpm)", fontsize=13, color="#e53935")
-        ax2.tick_params(axis="y", colors="#e53935", labelsize=13)
+        ax2.set_ylabel("심박수(bpm)", fontsize=14, color="#e53935")
+        ax2.tick_params(axis="y", colors="#e53935", labelsize=14)
         ax2.spines["top"].set_visible(False)
         ax2.spines["left"].set_visible(False)
         ax2.spines["bottom"].set_visible(False)
@@ -290,36 +291,36 @@ def make_biosignal_overview_plot(
         ax1.legend(
             legend_patches + handles2,
             [p.get_label() for p in legend_patches] + labels2,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.12),
+            loc="lower center",
+            bbox_to_anchor=(0.5, 0.97),
             ncol=3,
-            fontsize=11,
+            fontsize=13,
             framealpha=0.0,
             edgecolor="none",
         )
     else:
         ax1.legend(
             handles=legend_patches,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.12),
+            loc="lower center",
+            bbox_to_anchor=(0.5, 0.97),
             ncol=3,
-            fontsize=12,
+            fontsize=13,
             framealpha=0.0,
             edgecolor="none",
         )
 
     ax1.set_xticks(x_idx)
-    ax1.set_xticklabels(times, rotation=0, ha="center", fontsize=13)
+    ax1.set_xticklabels(times, rotation=0, ha="center", fontsize=14)
 
-    plt.title("시간대별 생체신호", fontsize=14, fontweight="bold", color="#222222", pad=14)
+    plt.title("시간대별 생체신호", fontsize=16, fontweight="bold", color="#222222", pad=36)
 
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.22)
+    fig.subplots_adjust(bottom=0.15)
 
     fig.text(
-        0.5, 0.02,
+        0.5, 0.01,
         "* 스트레스/안정 구분은 심박수 외 여러 HRV 지표를 종합해 판단합니다.",
-        ha="center", fontsize=11, color="#666666",
+        ha="center", fontsize=12, color="#666666",
     )
 
     sid = session_id or "nosess"
@@ -371,9 +372,22 @@ def get_validation_data(state: dict):
             print("analysis parse error:", e)
             print("failed raw analysis:", a)
 
-    if len(parsed) < 3:
+    if not parsed:
         return {
-            "random_turns": [],
+            "random_turns": [
+                {
+                    "original_text": "",
+                    "prev_ai_text": "",
+                    "situation": "",
+                    "emotion": {"main": "", "sub": ""},
+                },
+                {
+                    "original_text": "",
+                    "prev_ai_text": "",
+                    "situation": "",
+                    "emotion": {"main": "", "sub": ""},
+                },
+            ],
             "top_emotions": [],
         }
 
