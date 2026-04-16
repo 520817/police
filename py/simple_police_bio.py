@@ -838,7 +838,7 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         opening_q = DEFAULT_OPENING_Q
         support_suffix = DEFAULT_SUPPORT_SUFFIX
         full_text = opening_q + "\n" + support_suffix
-        graph.update_state(config, {"biosignal_consent": "declined", "biosignal": {}})
+        graph.update_state(config, {"biosignal_consent": "declined", "biosignal": {}, "biosignal_last": {}})
         return {
             "replies": [full_text],
             "biosignal_first_emit": False,
