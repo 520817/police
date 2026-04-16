@@ -9,7 +9,7 @@ load_dotenv()
 def get_db_connection():
     try:
         db_url = os.getenv("DATABASE_URL")
-        conn = psycopg2.connect(db_url)
+        conn = psycopg2.connect(db_url, options="-c timezone=Asia/Seoul")
         return conn
     except Exception as e:
         print(f"Connection Error: {e}")
