@@ -897,6 +897,7 @@ function MessageForm({
   isAiBusy,
 }) {
   const [value, setValue] = useState("");
+  const textareaRef = useRef(null);
 
   const isDisabled = useMemo(() => disabled || !value.trim(), [disabled, value]);
 
@@ -907,22 +908,44 @@ function MessageForm({
     return "메시지를 입력하세요.";
   };
 
+  const handleChange = (e) => {
+    setValue(e.target.value);
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (isDisabled) return;
+      onSendMessage(value);
+      setValue("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+    }
+  };
+
   const onSubmit = (e) => {
     e.preventDefault();
     if (isDisabled) return;
     onSendMessage(value);
     setValue("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
   return (
     <form className="message-form" onSubmit={onSubmit}>
-      <input
-        className="message-input"
-        type="text"
+      <textarea
+        ref={textareaRef}
+        className="message-input message-textarea"
         placeholder={getPlaceholder()}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
         disabled={disabled}
+        rows={1}
       />
       <button className="send-button" type="submit" disabled={isDisabled}>
         전송
