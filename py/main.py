@@ -193,6 +193,13 @@ def get_validation(session_id: str):
     try:
         validation_data = get_validation_data(state)
 
+        if validation_data.get("is_insufficient"):
+            return {
+                "status": "insufficient_data",
+                "message": "분석 가능한 대화가 부족합니다.",
+                "validation_data": None
+            }
+
         random_turns = validation_data.get("random_turns") or []
         peak_original = ""
         for item in random_turns:
