@@ -391,7 +391,10 @@ def get_validation_data(state: dict):
             "top_emotions": [],
         }
 
-    valid_items = [x for x in parsed if x["original_text"]] or parsed
+    long_items = [x for x in parsed if len(x["original_text"]) >= 10]
+    if len(long_items) < 3:
+        return {"is_insufficient": True, "random_turns": [], "top_emotions": []}
+    valid_items = long_items
 
     def _is_meaningful_situation(text: str) -> bool:
         s = (text or "").strip().lower()
