@@ -33,7 +33,7 @@ from db import *
 
 # 공통 LLM
 LLM_MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
-llm = ChatOpenAI(model=LLM_MODEL, temperature=0.5, max_tokens=1024)
+llm = ChatOpenAI(model=LLM_MODEL, temperature=0.3, max_tokens=1024)
 
 class AppState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
