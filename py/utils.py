@@ -209,118 +209,123 @@ def make_biosignal_overview_plot(
     if int(valid_mask.sum()) < 6:
         return None
 
-    bar_colors = np.where(stress == 1, "#ef5350", "#42a5f5")
+    COLOR_STRESS = "#ef5350"   # 빨강 (스트레스)
+    COLOR_CALM   = "#42a5f5"   # 파랑 (안정)
+    COLOR_NODATA = "#e0e0e0"   # 회색 (데이터 없음)
+    bar_colors = np.where(stress == 1, COLOR_STRESS, COLOR_CALM)
 
-    fig, ax1 = plt.subplots(figsize=(8, 5.5), dpi=130)
+    COLOR_DOT = "#546E7A"   # 심박수 점 색상 (청회색, 빨강/파랑과 안겹침)
+
+    fig, (ax_top, ax_bot) = plt.subplots(
+        2, 1, sharex=True, dpi=130,
+        figsize=(8, 4.2),
+        gridspec_kw={"height_ratios": [0.5, 2.2]},
+    )
     fig.patch.set_facecolor("#fafafa")
-    ax1.set_facecolor("#fafafa")
-    ax1.grid(False)
+    ax_top.set_facecolor("#fafafa")
+    ax_bot.set_facecolor("#fafafa")
 
+    # ── 상단 패널: 스트레스/안정 bar (텍스트 없음) ──
     for xi, has_data, color in zip(x_idx, np.isfinite(stress), bar_colors):
         if has_data:
-            ax1.bar(xi, 1, width=0.8, color=color, alpha=0.5, zorder=1)
+            ax_top.bar(xi, 1, width=1.0, align="edge", color=color, alpha=0.55, zorder=1)
+        else:
+            ax_top.bar(xi, 1, width=1.0, align="edge", color=COLOR_NODATA, alpha=0.4, zorder=1)
 
-    legend_patches = [
-        Patch(facecolor="#ef5350", alpha=0.5, label="스트레스"),
-        Patch(facecolor="#42a5f5", alpha=0.5, label="안정"),
-    ]
+    ax_top.set_ylim(0, 1)
+    ax_top.set_yticks([])
+    ax_top.spines["top"].set_visible(False)
+    ax_top.spines["left"].set_visible(False)
+    ax_top.spines["right"].set_visible(False)
+    ax_top.spines["bottom"].set_linewidth(0.8)
+    ax_top.spines["bottom"].set_color("#cccccc")
 
-    ax1.set_ylim(bottom=0, top=1.2)
-    ax1.set_yticks([])
-    ax1.set_yticklabels("")
-    ax1.set_xlabel("시간", fontsize=14, color="#222222")
-    ax1.set_ylabel("스트레스 여부", fontsize=14, color="#222222")
+    # ── 상단 패널: 슬롯 구분 세로선 ──
+    for xi in x_idx[1:]:
+        ax_top.axvline(x=xi, color="#cccccc", linewidth=0.6, zorder=2)
 
-    ax1.spines["top"].set_visible(False)
-    ax1.spines["right"].set_visible(False)
-    ax1.spines["left"].set_color("#aaaaaa")
-    ax1.spines["bottom"].set_color("#aaaaaa")
-    ax1.tick_params(axis="y", labelsize=13, colors="#222222")
-    ax1.tick_params(axis="x", labelsize=13, colors="#222222")
+    # ── 하단 패널: BPM 선 그래프 ──
+    valid_hr_mask = np.isfinite(hr)
+    if valid_hr_mask.any():
+        x_center = x_idx + 0.5   # bar 중앙 정렬
 
-    ax2 = None
-    if np.isfinite(hr).any():
-        ax2 = ax1.twinx()
-        ax2.grid(False)
-
-        valid_hr_mask = np.isfinite(hr)
-        ax2.plot(
-            x_idx[valid_hr_mask],
+        # 전체 연결
+        ax_bot.plot(
+            x_center[valid_hr_mask],
             hr[valid_hr_mask],
-            color="#e53935",
-            linewidth=1.5,
-            linestyle="--",
-            alpha=0.5,
+            color="#bbbbbb",
+            linewidth=1.2,
+            zorder=2,
+        )
+
+        ax_bot.scatter(
+            x_center[valid_hr_mask],
+            hr[valid_hr_mask],
+            c=COLOR_DOT,
+            s=55,
             zorder=3,
         )
-        ax2.scatter(
-            x_idx[valid_hr_mask],
-            hr[valid_hr_mask],
-            color="#e53935",
-            s=70,
-            zorder=4,
-            label="심박수(bpm)",
-        )
-
-        for xi, yi in zip(x_idx[valid_hr_mask], hr[valid_hr_mask]):
-            ax2.annotate(
+        for xi, yi in zip(x_center[valid_hr_mask], hr[valid_hr_mask]):
+            ax_bot.annotate(
                 f"{int(round(yi))}",
                 xy=(xi, yi),
-                xytext=(0, 10),
+                xytext=(0, 7),
                 textcoords="offset points",
-                fontsize=15,
-                color="#c62828",
+                fontsize=10,
+                color=COLOR_DOT,
                 ha="center",
                 va="bottom",
                 fontweight="bold",
             )
 
-        ax2.set_ylabel("심박수(bpm)", fontsize=14, color="#e53935")
-        ax2.tick_params(axis="y", colors="#e53935", labelsize=14)
-        ax2.spines["top"].set_visible(False)
-        ax2.spines["left"].set_visible(False)
-        ax2.spines["bottom"].set_visible(False)
-        ax2.spines["right"].set_color("#aaaaaa")
-
         hr_valid = hr[valid_hr_mask]
-        hr_min = np.nanmin(hr_valid)
-        hr_max = np.nanmax(hr_valid)
-        ax2.set_ylim(bottom=max(0, hr_min - 15), top=hr_max + 20)
+        y_bot = min(30, int(np.nanmin(hr_valid)) - 5)
+        y_top = max(120, int(np.nanmax(hr_valid)) + 10)
+        y_top = min(y_top, 180)
+        ax_bot.set_ylim(bottom=y_bot, top=y_top)
+        ax_bot.set_yticks(range(y_bot, y_top + 1, 20))
+        ax_bot.tick_params(axis="y", labelsize=10, colors="#555555")
 
-        handles2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(
-            legend_patches + handles2,
-            [p.get_label() for p in legend_patches] + labels2,
-            loc="lower center",
-            bbox_to_anchor=(0.5, 0.97),
-            ncol=3,
-            fontsize=13,
-            framealpha=0.0,
-            edgecolor="none",
-        )
-    else:
-        ax1.legend(
-            handles=legend_patches,
-            loc="lower center",
-            bbox_to_anchor=(0.5, 0.97),
-            ncol=3,
-            fontsize=13,
-            framealpha=0.0,
-            edgecolor="none",
-        )
+    # 하단 패널 세로 grid (시간대 구분)
+    ax_bot.set_xticks(x_idx + 0.5)
+    ax_bot.set_xticklabels(times, rotation=0, ha="center", fontsize=11)
+    ax_bot.tick_params(axis="x", labelsize=11, colors="#222222")
+    for xi in x_idx[1:]:
+        ax_bot.axvline(x=xi, color="#e0e0e0", linewidth=0.6, zorder=1)
 
-    ax1.set_xticks(x_idx)
-    ax1.set_xticklabels(times, rotation=0, ha="center", fontsize=14)
+    ax_bot.spines["top"].set_visible(False)
+    ax_bot.spines["right"].set_visible(False)
+    ax_bot.spines["left"].set_color("#cccccc")
+    ax_bot.spines["bottom"].set_color("#cccccc")
 
-    plt.title("시간대별 생체신호", fontsize=16, fontweight="bold", color="#222222", pad=36)
+    # ── 범례 (상단 패널 위) ──
+    legend_patches = [
+        Patch(facecolor=COLOR_STRESS, alpha=0.55, label="스트레스"),
+        Patch(facecolor=COLOR_CALM,   alpha=0.55, label="안정"),
+        Patch(facecolor=COLOR_NODATA, alpha=0.4,  label="데이터 없음"),
+    ]
+    from matplotlib.lines import Line2D
+    hr_handle = Line2D([0], [0], marker="o", color="#bbbbbb", markerfacecolor=COLOR_DOT,
+                       markersize=6, label="심박수(bpm)", linewidth=1.2)
+    ax_top.legend(
+        handles=legend_patches + [hr_handle],
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=4,
+        fontsize=10,
+        framealpha=0.0,
+        edgecolor="none",
+    )
 
+    # ── 공통 ──
+    fig.suptitle("오늘의 신체 상태", fontsize=15, fontweight="bold", color="#222222", y=1.06)
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.15)
+    fig.subplots_adjust(hspace=0, bottom=0.14)
 
     fig.text(
-        0.5, 0.01,
+        0.5, 0.02,
         "* 스트레스/안정 구분은 심박수 외 여러 HRV 지표를 종합해 판단합니다.",
-        ha="center", fontsize=12, color="#666666",
+        ha="center", fontsize=11, color="#666666",
     )
 
     sid = session_id or "nosess"
