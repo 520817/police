@@ -557,9 +557,7 @@ export default function App() {
           let actualSessionId = sessionId;
 
           if (precheckPhase === "pre") {
-            // 1일 1세션: HHMMSS 없이 KST day 기준 session_id 사용
-            actualSessionId = `${userId}_${getKstDay()}`;
-            persistSessionId(actualSessionId);
+            actualSessionId = sessionId;
           }
 
           try {
