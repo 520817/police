@@ -254,6 +254,16 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     except Exception as e:
         print(f"[DB Error] Biosignal log save failed: {e}")
 
+    first_ai_content = f"{biosignal_result_text}\n{opening_q}\n{support_suffix}".strip()
+    try:
+        save_chat_message(
+            session_id=state["meta"]["session_id"],
+            role="ai",
+            content=first_ai_content,
+        )
+    except Exception as e:
+        print(f"[DB Error] Biosignal first message save failed: {e}")
+        
     return {
         "biosignal_done": True,
         "biosignal_first_emit": True,
