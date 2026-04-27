@@ -847,7 +847,7 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
             day=day,
             collection_type="Automatic",
             target_hours=12,
-            start_datetime=datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None),
+            start_datetime=datetime(2026, 4, 24, 18, 0, 0), # start_datetime=datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None),
             shift_type=shift_type,
         )
             inputs["biosignal"] = records if records else {}
