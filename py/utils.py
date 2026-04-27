@@ -188,8 +188,11 @@ def make_biosignal_overview_plot(
         diff_mins = diff_mins[np.isfinite(diff_mins) & (diff_mins >= 1)]
         freq_min = 60 if len(diff_mins) == 0 else int(np.clip(int(round(np.min(diff_mins))), 5, 120))
 
-    max_slots = 12
-    window = pd.Timedelta(minutes=freq_min * (max_slots - 1))
+    actual_count = len(uniq_dt)
+    max_slots = max(12, actual_count)
+    display_slots = 12  # 12개 이하면 12칸 고정, 초과면 실제 개수
+
+    window = pd.Timedelta(minutes=freq_min * (min(12, actual_count) - 1))
 
     best_start, best_count = uniq_dt.iloc[0], -1
     for s in uniq_dt:
@@ -197,7 +200,10 @@ def make_biosignal_overview_plot(
         if cnt > best_count or (cnt == best_count and s > best_start):
             best_count, best_start = cnt, s
 
-    slots = pd.date_range(start=best_start, periods=max_slots, freq=f"{freq_min}min")
+    if actual_count <= 12:
+        slots = pd.date_range(start=best_start, periods=12, freq=f"{freq_min}min")
+    else:
+        slots = pd.date_range(start=uniq_dt.iloc[0], periods=actual_count, freq=f"{freq_min}min")
     df = df.set_index("_dt").reindex(slots)
 
     times = slots.strftime("%H").tolist()
