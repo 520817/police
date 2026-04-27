@@ -25,6 +25,8 @@ from langgraph.graph.message import add_messages
 
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 from utils import *
@@ -33,7 +35,7 @@ from db import *
 
 # 공통 LLM
 LLM_MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
-llm = ChatOpenAI(model=LLM_MODEL, temperature=0.3, max_tokens=1024)
+llm = ChatOpenAI(model=LLM_MODEL, temperature=0.5, max_tokens=1024)
 
 class AppState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
@@ -269,16 +271,17 @@ ANALYZER_SYS = """\
 사용자의 텍스트를 중심으로 상황과 감정을 해석하되, 보조 정보(생체신호, 프로필)를 활용해 전문적이고 입체적인 응답 방향을 결정한다.
 
 [시스템 컨텍스트]
-- 시점: 하루치 생체데이터 수집이 완료된 후, [근무일 퇴근 후] 혹은 [휴일 밤]에 이루어지는 회고 대화다.
-- 상태: 사용자는 피로도가 높거나 하루를 정리하는 차분한 상태임을 전제한다.
+- 시점: 하루치 생체데이터 수집이 완료된 후, [근무일 퇴근 후] 혹은 [비번/휴무의 경우 저녁~밤]에 이루어지는 회고 대화다. 단, 피험자 사정에 따라 예외적인 시간대에 진행될 수 있다.
 
 [입력 정보]
 text: "{user_text}"
 dept: {dept} / user_rank: {user_rank}
 shift_type: {shift_type} 
-  * day: 주간(오전~오후) 근무 일정이 포함된 날.
-  * night: 야간(저녁~다음날 오전) 근무 일정이 포함된 날.
-  * holiday: 공식적인 근무 일정이 없는 휴무일.
+  * day: 주간근무 (오전~오후 근무). 내근직 평일 포함.
+  * night: 야간근무 (저녁~익일 오전 근무). 신체적 피로와 수면 리듬 교란 가능성을 고려한다.
+  * off: 비번 (야간근무 후 쉬는 날). 전날 야간근무의 피로가 누적되어 있을 가능성을 고려한다.
+  * duty: 당직 (24시간 대기 상태). 언제 출동할지 모르는 불규칙한 긴장 상태가 지속됨.
+  * holiday: 휴무 (공식 휴일 또는 내근직 주말). 근무 없이 완전히 쉬는 날.
 biosignal_summary: {biosignal_summary}
 
 [보조 정보 활용 및 데이터 노출 전략]
@@ -555,7 +558,7 @@ def analyzer_node(state: AppState, analyzer_chain):
     }
 
 RESPONDER_SYS = """\
-너는 퇴근한(혹은 휴일 밤인) 경찰관의 고충을 깊이 이해하는 스마트하고 따뜻한 동료다. 
+너는 하루의 어느 시점에 챗봇을 찾은 경찰관의 고충을 깊이 이해하는 스마트하고 따뜻한 동료다.
 분석 에이전트의 지침을 바탕으로, 때로는 데이터로 날카롭게 통찰하고 때로는 사람 냄새 나게 공감한다.
 
 [입력]
@@ -750,27 +753,6 @@ def get_graph():
     checkpointer.setup()
     return g.compile(checkpointer=checkpointer)
 
-
-def _detect_shift_from_records(records) -> str | None:
-    """HR이 있는 슬롯의 시간대로 day/night를 자동 감지한다. 판단 불가 시 None 반환."""
-    day_count, night_count = 0, 0
-    for r in records or []:
-        hr = r.get("PPG_MeanHR", "N/A")
-        if hr in ("N/A", None, ""):
-            continue
-        try:
-            hour = int(str(r.get("time", "")).split(":")[0])
-        except Exception:
-            continue
-        if 8 <= hour < 20:
-            day_count += 1
-        else:
-            night_count += 1
-    if day_count == 0 and night_count == 0:
-        return None
-    return "day" if day_count >= night_count else "night"
-
-
 def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str = "day", prt: str = "", day: str = "", session_id: str = "", biosignal_consent: Optional[Literal["accepted", "declined", "unknown"]] = None, modal_submit: bool = False,):
     """
     프론트 입력: user_text, dept, user_rank, shift_type
@@ -850,14 +832,17 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
     records_count = 0
     if target_consent == "accepted" and (force_biosignal_rerun or (not current_state.get("biosignal"))):
         try:
-            records = get_biosignal_records(prt=prt, day=day, collection_type="Automatic", target_hours=12)
+            records = get_biosignal_records(
+            prt=prt,
+            day=day,
+            collection_type="Automatic",
+            target_hours=12,
+            start_datetime=datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None),
+            shift_type=shift_type,
+        )
             inputs["biosignal"] = records if records else {}
             records_count = len(records) if isinstance(records, list) else 0
 
-            detected_shift = _detect_shift_from_records(records)
-            if detected_shift:
-                inputs["profile"]["shift_type"] = detected_shift
-                print(f"[shift_type] 입력값={shift_type} → 데이터 기반 감지={detected_shift}")
         except Exception as e:
             inputs["biosignal"] = {}
             print(f"[Data Error] 생체 신호 로드 실패: {e}")
