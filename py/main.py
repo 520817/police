@@ -50,7 +50,7 @@ class ChatInput(BaseModel):
     text: str
     dept: Optional[str] = None
     user_rank: Optional[str] = None
-    shift_type: Optional[str] = None
+    shift_type: Optional[Literal["day", "night", "off", "duty", "holiday"]] = None
     biosignal_consent: Optional[Literal["accepted", "declined", "unknown"]] = None
     modal_submit: Optional[bool] = False
 
@@ -231,3 +231,4 @@ def get_validation(session_id: str):
 @app.get("/ping")
 def ping():
     return {"ok": True}
+
