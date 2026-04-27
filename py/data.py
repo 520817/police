@@ -124,5 +124,3 @@ def get_biosignal_records(
 
     print(f"[data] 유효 슬롯 {len(records)}개 로드 완료")
     return records
-
-    return df_grouped.to_dict(orient="records")
