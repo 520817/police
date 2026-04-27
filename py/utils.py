@@ -75,39 +75,6 @@ def linebreak_by_sentence(text: str) -> str:
         out_paras.append(s)
     return "\n\n".join(out_paras)
 
-
-def normalize_stage_transition(
-    current_stage: str,
-    proposed_stage: str,
-    analyzed_turn_count: int = 0,
-) -> str:
-    current = str(current_stage or "engaging").strip().lower()
-    proposed = str(proposed_stage or current or "engaging").strip().lower()
-    valid = {"engaging", "evoking", "conclusion"}
-    if current not in valid:
-        current = "engaging"
-    if proposed not in valid:
-        proposed = current
-    try:
-        analyzed_turn_count = int(analyzed_turn_count)
-    except Exception:
-        analyzed_turn_count = 0
-
-    stage_order = ["engaging", "evoking", "conclusion"]
-    current_idx = stage_order.index(current)
-    proposed_idx = stage_order.index(proposed)
-
-    # 두 단계 이상 건너뛰기 금지 (engaging → conclusion 직행 포함)
-    if proposed_idx - current_idx > 1:
-        return stage_order[current_idx + 1]
-
-    # conclusion에서 후퇴 금지
-    if current == "conclusion" and proposed_idx < current_idx:
-        return "conclusion"
-
-    return proposed
-
-
 def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
     """
     time 컬럼의 'HH:MM' 또는 'YYYY-MM-DD HH:MM' 문자열을 datetime으로 변환한다.
