@@ -6,6 +6,10 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import List
 
+MACHINE_TOKEN = os.getenv("MACHINE_TOKEN")
+BASE_URL = "https://lst-police.plaidai.io/api/machine"
+HEADERS = {"Authorization": f"Bearer {MACHINE_TOKEN}"}
+
 def get_biosignal_records(
     prt: str,
     day: str,
