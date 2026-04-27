@@ -13,9 +13,9 @@ from simple_police_bio import predict, SESSION_STATES, get_graph
 
 # --------------------------------------------------------------
 # TEST 모드: CSV 기반 테스트를 위해 prt/day를 고정
-USE_FIXED_TEST_CONTEXT = False
-TEST_PRT = "prt2098"
-TEST_DAY = "2025-09-20"
+USE_FIXED_TEST_CONTEXT = True
+TEST_PRT = "01011112222"
+TEST_DAY = "2026-04-24"
 # --------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
