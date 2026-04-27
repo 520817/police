@@ -16,6 +16,7 @@ from simple_police_bio import predict, SESSION_STATES, get_graph
 USE_FIXED_TEST_CONTEXT = True
 TEST_PRT = "01011112222"
 TEST_DAY = "2026-04-24"
+TEST_DATETIME = datetime(2026, 4, 24, 18, 0, 0)
 # --------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
