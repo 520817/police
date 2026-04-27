@@ -127,7 +127,7 @@ export default function App() {
 
     const storedShiftType = localStorage.getItem("shift_type");
     if (storedShiftType) {
-      setShiftType(storedShiftType);
+      setShiftType(storedShiftType === "holiday" ? "off" : storedShiftType);
     }
 
     const storedSessionId = localStorage.getItem("session_id");
@@ -557,6 +557,7 @@ export default function App() {
           let actualSessionId = sessionId;
 
           if (precheckPhase === "pre") {
+            // 1일 1세션: HHMMSS 없이 KST day 기준 session_id 사용
             actualSessionId = sessionId;
           }
 
@@ -721,6 +722,8 @@ export default function App() {
             >
               <option value="day">주간</option>
               <option value="night">야간</option>
+              <option value="off">비번</option>
+              <option value="duty">당직</option>
               <option value="holiday">휴무</option>
             </select>
             <button
