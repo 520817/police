@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # coding: utf-8
 from __future__ import annotations
 
@@ -898,5 +898,5 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         "records_loaded": records_count,
         "logs": out.get("logs", []),
         "consent_state": out.get("biosignal_consent", "unknown"),
-        "bio_html": out.get("biosignal_last", {}).get("bio_html") if was_first else None,
+        "bio_html": out.get("biosignal_last", {}).get("bio_html"),
     }
