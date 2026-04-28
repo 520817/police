@@ -165,7 +165,7 @@ def chat(input: ChatInput):
         "biosignal_first_emit": resp.get("biosignal_first_emit", False),
         "consent_state": resp.get("consent_state", "unknown"),
         "logs": resp.get("logs", []),
-        "plot_path": resp.get("plot_path"),
+        "bio_html": resp.get("bio_html") if resp.get("biosignal_first_emit") else None,
         "session_id": resolved_session_id, # 실제 사용된 session_id 반환
     }
 
