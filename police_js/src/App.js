@@ -34,25 +34,12 @@ function Typewriter({ text, speed = 30, onDone, onStep }) {
 }
 
 // 이미지 말풍선 (생체신호 플롯)
-function ImageMessageBubble({ src }) {
-  if (!src) return null;
+function ImageMessageBubble({ html }) {
+  if (!html) return null;
   return (
     <div className="ai-message">
-      <div className="bio-plot-wrapper">
-        <div className="ai-label">K폴담</div>
-        <div className="bio-plot-box">
-          <img
-            src={src}
-            alt="생체신호 그래프"
-            className="bio-plot-img"
-            style={{
-              maxWidth: "100%",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-            }}
-          />
-        </div>
-      </div>
+      <div className="ai-label">K폴담</div>
+      <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
 }
@@ -365,7 +352,7 @@ export default function App() {
         : data.reply
         ? [data.reply]
         : [];
-      const plotPath = data.plot_path || null;
+      const bioHtml = data.bio_html || null;
 
       setMessages((prev) => {
         let next = [...prev];
@@ -378,12 +365,12 @@ export default function App() {
         );
 
         // plot은 추가
-        if (plotPath) {
+        if (bioHtml) {
           next.push({
             id: makeId(),
             role: "ai",
             type: "plot",
-            src: apiOrigin + plotPath,
+            html: bioHtml,
             isTyping: false,
           });
         }
@@ -466,8 +453,12 @@ export default function App() {
 
       if (data.session_id) persistSessionId(data.session_id);
 
-      const arr = Array.isArray(data.replies) ? data.replies : [data.reply || ""];
-      const plotPath = data.plot_path || null;
+      const arr = Array.isArray(data.replies)
+        ? data.replies
+        : data.reply
+        ? [data.reply]
+        : [];
+      const bioHtml = data.bio_html || null;
 
       setMessages((prev) => {
         let next = [...prev];
@@ -479,12 +470,12 @@ export default function App() {
             : m
         );
 
-        if (plotPath) {
+        if (bioHtml) {
           next.push({
             id: makeId(),
             role: "ai",
             type: "plot",
-            src: apiOrigin + plotPath,
+            html: bioHtml,
             isTyping: false,
           });
         }
@@ -817,7 +808,7 @@ function MessageList({
       {messages.map((m, i) => (
         <React.Fragment key={m.id}>
           {m.type === "plot" ? (
-            <ImageMessageBubble src={m.src} />
+            <ImageMessageBubble html={m.html} />
           ) : (
             <Message
               id={m.id}
@@ -954,3 +945,4 @@ function MessageForm({
     </form>
   );
 }
+
