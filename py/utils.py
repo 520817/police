@@ -111,6 +111,7 @@ def make_biosignal_overview_plot(
     session_id: str | None,
     prt: str,
     day: str,
+    shift_type: str = "day",
     base_dir: str = "plots",
 ) -> str | None:
     if not valid_signals:
@@ -122,7 +123,6 @@ def make_biosignal_overview_plot(
     df = pd.DataFrame(valid_signals)
 
     time_col = "time"
-    hr_col = "MeanHR" if "MeanHR" in df.columns else "PPG_MeanHR"
     stress_col = "Stress"
 
     if time_col not in df.columns:
@@ -131,11 +131,10 @@ def make_biosignal_overview_plot(
     if df.empty:
         return None
 
-    for c in [stress_col, hr_col]:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-        else:
-            df[c] = np.nan
+    if stress_col in df.columns:
+        df[stress_col] = pd.to_numeric(df[stress_col], errors="coerce")
+    else:
+        df[stress_col] = np.nan
 
     df["_dt"] = _parse_dt_series(str(day), df[time_col].astype(str))
     df = df[df["_dt"].notna()].copy()
@@ -156,10 +155,9 @@ def make_biosignal_overview_plot(
         freq_min = 60 if len(diff_mins) == 0 else int(np.clip(int(round(np.min(diff_mins))), 5, 120))
 
     actual_count = len(uniq_dt)
-    max_slots = max(12, actual_count)
-    display_slots = 12  # 12개 이하면 12칸 고정, 초과면 실제 개수
+    slot_periods = 24 if shift_type == "duty" else 12
 
-    window = pd.Timedelta(minutes=freq_min * (min(12, actual_count) - 1))
+    window = pd.Timedelta(minutes=freq_min * (min(slot_periods, actual_count) - 1))
 
     best_start, best_count = uniq_dt.iloc[0], -1
     for s in uniq_dt:
@@ -167,8 +165,8 @@ def make_biosignal_overview_plot(
         if cnt > best_count or (cnt == best_count and s > best_start):
             best_count, best_start = cnt, s
 
-    if actual_count <= 12:
-        slots = pd.date_range(start=best_start, periods=12, freq=f"{freq_min}min")
+    if actual_count <= slot_periods:
+        slots = pd.date_range(start=best_start, periods=slot_periods, freq=f"{freq_min}min")
     else:
         slots = pd.date_range(start=uniq_dt.iloc[0], periods=actual_count, freq=f"{freq_min}min")
     df = df.set_index("_dt").reindex(slots)
@@ -176,129 +174,72 @@ def make_biosignal_overview_plot(
     times = slots.strftime("%H").tolist()
     x_idx = np.arange(len(slots))
     stress = df[stress_col].to_numpy(dtype=float) if stress_col in df.columns else np.full(len(slots), np.nan)
-    hr = df[hr_col].to_numpy(dtype=float) if hr_col in df.columns else np.full(len(slots), np.nan)
 
-    valid_mask = np.isfinite(stress) | np.isfinite(hr)
-    if int(valid_mask.sum()) < 6:
+    valid_mask = np.isfinite(stress)
+    if int(valid_mask.sum()) < 1:
         return None
 
-    COLOR_STRESS = "#ef5350"   # 빨강 (스트레스)
-    COLOR_CALM   = "#42a5f5"   # 파랑 (안정)
-    COLOR_NODATA = "#e0e0e0"   # 회색 (데이터 없음)
+    COLOR_STRESS = "#ef5350"
+    COLOR_CALM   = "#42a5f5"
+    COLOR_NODATA = "#e0e0e0"
     bar_colors = np.where(stress == 1, COLOR_STRESS, COLOR_CALM)
 
-    COLOR_DOT = "#546E7A"   # 심박수 점 색상 (청회색, 빨강/파랑과 안겹침)
+    shift_labels = {"day": "주간", "night": "야간", "off": "비번", "duty": "당직", "holiday": "휴무"}
+    shift_label = shift_labels.get(shift_type, shift_type)
+    hour_label = "24시간" if shift_type == "duty" else "12시간"
 
-    fig, (ax_top, ax_bot) = plt.subplots(
-        2, 1, sharex=True, dpi=130,
-        figsize=(8, 4.2),
-        gridspec_kw={"height_ratios": [0.5, 2.2]},
-    )
+    tick_fontsize = 8 if shift_type == "duty" else 11
+    fig_width = 10 if shift_type == "duty" else 8
+
+    fig, ax = plt.subplots(1, 1, dpi=130, figsize=(fig_width, 1.8))
     fig.patch.set_facecolor("#fafafa")
-    ax_top.set_facecolor("#fafafa")
-    ax_bot.set_facecolor("#fafafa")
+    ax.set_facecolor("#fafafa")
 
-    # ── 상단 패널: 스트레스/안정 bar (텍스트 없음) ──
     for xi, has_data, color in zip(x_idx, np.isfinite(stress), bar_colors):
         if has_data:
-            ax_top.bar(xi, 1, width=1.0, align="edge", color=color, alpha=0.55, zorder=1)
+            ax.bar(xi, 1, width=1.0, align="edge", color=color, alpha=0.65, zorder=1)
         else:
-            ax_top.bar(xi, 1, width=1.0, align="edge", color=COLOR_NODATA, alpha=0.4, zorder=1)
+            ax.bar(xi, 1, width=1.0, align="edge", color=COLOR_NODATA, alpha=0.4, zorder=1)
 
-    ax_top.set_ylim(0, 1)
-    ax_top.set_yticks([])
-    ax_top.spines["top"].set_visible(False)
-    ax_top.spines["left"].set_visible(False)
-    ax_top.spines["right"].set_visible(False)
-    ax_top.spines["bottom"].set_linewidth(0.8)
-    ax_top.spines["bottom"].set_color("#cccccc")
-
-    # ── 상단 패널: 슬롯 구분 세로선 ──
     for xi in x_idx[1:]:
-        ax_top.axvline(x=xi, color="#cccccc", linewidth=0.6, zorder=2)
+        ax.axvline(x=xi, color="#cccccc", linewidth=0.6, zorder=2)
 
-    # ── 하단 패널: BPM 선 그래프 ──
-    valid_hr_mask = np.isfinite(hr)
-    if valid_hr_mask.any():
-        x_center = x_idx + 0.5   # bar 중앙 정렬
+    ax.set_ylim(0, 1)
+    ax.set_yticks([])
+    ax.set_xticks(x_idx + 0.5)
+    ax.set_xticklabels(times, rotation=0, ha="center", fontsize=tick_fontsize)
+    ax.tick_params(axis="x", colors="#222222", length=0)
+    ax.spines["top"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_color("#cccccc")
 
-        # 전체 연결
-        ax_bot.plot(
-            x_center[valid_hr_mask],
-            hr[valid_hr_mask],
-            color="#bbbbbb",
-            linewidth=1.2,
-            zorder=2,
-        )
-
-        ax_bot.scatter(
-            x_center[valid_hr_mask],
-            hr[valid_hr_mask],
-            c=COLOR_DOT,
-            s=55,
-            zorder=3,
-        )
-        for xi, yi in zip(x_center[valid_hr_mask], hr[valid_hr_mask]):
-            ax_bot.annotate(
-                f"{int(round(yi))}",
-                xy=(xi, yi),
-                xytext=(0, 7),
-                textcoords="offset points",
-                fontsize=10,
-                color=COLOR_DOT,
-                ha="center",
-                va="bottom",
-                fontweight="bold",
-            )
-
-        hr_valid = hr[valid_hr_mask]
-        y_bot = min(30, int(np.nanmin(hr_valid)) - 5)
-        y_top = max(120, int(np.nanmax(hr_valid)) + 10)
-        y_top = min(y_top, 180)
-        ax_bot.set_ylim(bottom=y_bot, top=y_top)
-        ax_bot.set_yticks(range(y_bot, y_top + 1, 20))
-        ax_bot.tick_params(axis="y", labelsize=10, colors="#555555")
-
-    # 하단 패널 세로 grid (시간대 구분)
-    ax_bot.set_xticks(x_idx + 0.5)
-    ax_bot.set_xticklabels(times, rotation=0, ha="center", fontsize=11)
-    ax_bot.tick_params(axis="x", labelsize=11, colors="#222222")
-    for xi in x_idx[1:]:
-        ax_bot.axvline(x=xi, color="#e0e0e0", linewidth=0.6, zorder=1)
-
-    ax_bot.spines["top"].set_visible(False)
-    ax_bot.spines["right"].set_visible(False)
-    ax_bot.spines["left"].set_color("#cccccc")
-    ax_bot.spines["bottom"].set_color("#cccccc")
-
-    # ── 범례 (상단 패널 위) ──
     legend_patches = [
-        Patch(facecolor=COLOR_STRESS, alpha=0.55, label="스트레스"),
-        Patch(facecolor=COLOR_CALM,   alpha=0.55, label="안정"),
+        Patch(facecolor=COLOR_STRESS, alpha=0.65, label="스트레스"),
+        Patch(facecolor=COLOR_CALM,   alpha=0.65, label="안정"),
         Patch(facecolor=COLOR_NODATA, alpha=0.4,  label="데이터 없음"),
     ]
-    from matplotlib.lines import Line2D
-    hr_handle = Line2D([0], [0], marker="o", color="#bbbbbb", markerfacecolor=COLOR_DOT,
-                       markersize=6, label="심박수(bpm)", linewidth=1.2)
-    ax_top.legend(
-        handles=legend_patches + [hr_handle],
+    ax.legend(
+        handles=legend_patches,
         loc="lower center",
-        bbox_to_anchor=(0.5, 1.02),
-        ncol=4,
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=3,
         fontsize=10,
         framealpha=0.0,
         edgecolor="none",
     )
 
-    # ── 공통 ──
-    fig.suptitle("오늘의 신체 상태", fontsize=15, fontweight="bold", color="#222222", y=1.06)
+    fig.suptitle(
+        f"오늘의 신체 상태  |  {shift_label} · {hour_label}",
+        fontsize=13, fontweight="bold", color="#222222", y=1.28,
+    )
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0, bottom=0.14)
+    fig.subplots_adjust(bottom=0.28)
 
     fig.text(
-        0.5, 0.02,
+        0.5, -0.12,
         "* 스트레스/안정 구분은 심박수 외 여러 HRV 지표를 종합해 판단합니다.",
-        ha="center", fontsize=11, color="#666666",
+        ha="center", fontsize=10, color="#666666",
     )
 
     sid = session_id or "nosess"
