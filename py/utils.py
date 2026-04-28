@@ -1,30 +1,11 @@
-﻿from typing import Any, Iterable, List, Dict, Optional
+from typing import Any, Iterable, List, Dict, Optional
 import json
 import os
 import re
-import uuid
 import random
 
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 import numpy as np
 import pandas as pd
-from matplotlib import rcParams
-from matplotlib.patches import Patch
-import urllib.request
-
-matplotlib.use("Agg")  # 서버 환경에서 GUI 없이 렌더링
-# 한글 폰트 설정 (Render Linux 환경)
-font_path = "/tmp/NanumGothic.ttf"
-if not os.path.exists(font_path):
-    urllib.request.urlretrieve(
-        "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
-        font_path
-    )
-fm.fontManager.addfont(font_path)
-matplotlib.rc("font", family="NanumGothic")  # 이 줄 추가
-matplotlib.rcParams["axes.unicode_minus"] = False
 
 def _to_list(seq: Iterable[Any]) -> List[Any]:
     if seq is None:
@@ -46,10 +27,6 @@ def _time_to_hhmm_list(seq: Iterable[Any]) -> List[Optional[str]]:
 
 
 def remove_ppg_prefix(obj):
-    """
-    dict 또는 list[dict]에서 키가 'PPG_'로 시작하면 접두사를 제거한다.
-    원본 구조는 유지하고 키만 변경한다.
-    """
     if isinstance(obj, list):
         return [remove_ppg_prefix(x) for x in obj]
     if isinstance(obj, dict):
@@ -75,15 +52,10 @@ def linebreak_by_sentence(text: str) -> str:
         out_paras.append(s)
     return "\n\n".join(out_paras)
 
-def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
-    """
-    time 컬럼의 'HH:MM' 또는 'YYYY-MM-DD HH:MM' 문자열을 datetime으로 변환한다.
-    '24:MM'은 다음 날 00:MM으로 보정한다.
-    """
 
+def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
     def parse_one(s: str):
         s = str(s).strip()
-
         if re.match(r"^\d{4}-\d{2}-\d{2}", s):
             m = re.search(r"\s(24):(\d{2})$", s)
             if m:
@@ -91,37 +63,26 @@ def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
                 base = pd.to_datetime(s[:10] + f" 00:{mm}", errors="coerce")
                 return base + pd.Timedelta(days=1) if pd.notna(base) else pd.NaT
             return pd.to_datetime(s, errors="coerce")
-
         m = re.match(r"^(24):(\d{2})$", s)
         if m:
             mm = m.group(2)
             base = pd.to_datetime(f"{day} 00:{mm}", errors="coerce")
             return base + pd.Timedelta(days=1) if pd.notna(base) else pd.NaT
-
         dt = pd.to_datetime(f"{day} {s}", errors="coerce")
         if pd.notna(dt) and dt.hour < 8:
             dt = dt + pd.Timedelta(days=1)
         return dt
-
     return time_series.apply(parse_one)
 
 
-def make_biosignal_overview_plot(
+def make_biosignal_html(
     valid_signals,
-    session_id: str | None,
-    prt: str,
-    day: str,
     shift_type: str = "day",
-    base_dir: str = "plots",
 ) -> str | None:
     if not valid_signals:
         return None
 
-    save_dir = os.path.join(base_dir, prt, day)
-    os.makedirs(save_dir, exist_ok=True)
-
     df = pd.DataFrame(valid_signals)
-
     time_col = "time"
     stress_col = "Stress"
 
@@ -136,119 +97,107 @@ def make_biosignal_overview_plot(
     else:
         df[stress_col] = np.nan
 
-    df["_dt"] = _parse_dt_series(str(day), df[time_col].astype(str))
+    df["_dt"] = _parse_dt_series(
+        df[time_col].iloc[0][:10] if str(df[time_col].iloc[0]).count("-") >= 2
+        else str(pd.Timestamp.today().date()),
+        df[time_col].astype(str),
+    )
     df = df[df["_dt"].notna()].copy()
     if df.empty:
         return None
 
     df = df.sort_values("_dt")
-    uniq_dt = pd.Series(df["_dt"].drop_duplicates().sort_values().to_list())
-    if len(uniq_dt) == 0:
+    slot_map = {}
+    for _, row in df.iterrows():
+        h = row["_dt"].hour
+        key = f"{h:02d}"
+        if key not in slot_map:
+            slot_map[key] = row.get(stress_col, np.nan)
+
+    if not slot_map:
         return None
 
-    if len(uniq_dt) == 1:
-        freq_min = 60
-    else:
-        diffs = uniq_dt.diff().dropna()
-        diff_mins = (diffs.dt.total_seconds() / 60.0).to_numpy()
-        diff_mins = diff_mins[np.isfinite(diff_mins) & (diff_mins >= 1)]
-        freq_min = 60 if len(diff_mins) == 0 else int(np.clip(int(round(np.min(diff_mins))), 5, 120))
+    is_duty = shift_type == "duty"
+    slot_count = 24 if is_duty else 12
 
-    actual_count = len(uniq_dt)
-    slot_periods = 24 if shift_type == "duty" else 12
-
-    window = pd.Timedelta(minutes=freq_min * (min(slot_periods, actual_count) - 1))
-
-    best_start, best_count = uniq_dt.iloc[0], -1
-    for s in uniq_dt:
-        cnt = int(((uniq_dt >= s) & (uniq_dt <= s + window)).sum())
-        if cnt > best_count or (cnt == best_count and s > best_start):
-            best_count, best_start = cnt, s
-
-    if actual_count <= slot_periods:
-        slots = pd.date_range(start=best_start, periods=slot_periods, freq=f"{freq_min}min")
-    else:
-        slots = pd.date_range(start=uniq_dt.iloc[0], periods=actual_count, freq=f"{freq_min}min")
-    df = df.set_index("_dt").reindex(slots)
-
-    times = slots.strftime("%H").tolist()
-    x_idx = np.arange(len(slots))
-    stress = df[stress_col].to_numpy(dtype=float) if stress_col in df.columns else np.full(len(slots), np.nan)
-
-    valid_mask = np.isfinite(stress)
-    if int(valid_mask.sum()) < 1:
-        return None
-
-    COLOR_STRESS = "#ef5350"
-    COLOR_CALM   = "#42a5f5"
-    COLOR_NODATA = "#e0e0e0"
-    bar_colors = np.where(stress == 1, COLOR_STRESS, COLOR_CALM)
-
-    shift_labels = {"day": "주간", "night": "야간", "off": "비번", "duty": "당직", "holiday": "휴무"}
-    shift_label = shift_labels.get(shift_type, shift_type)
-    hour_label = "24시간" if shift_type == "duty" else "12시간"
-
-    tick_fontsize = 8 if shift_type == "duty" else 11
-    fig_width = 10 if shift_type == "duty" else 8
-
-    fig, ax = plt.subplots(1, 1, dpi=130, figsize=(fig_width, 1.8))
-    fig.patch.set_facecolor("#fafafa")
-    ax.set_facecolor("#fafafa")
-
-    for xi, has_data, color in zip(x_idx, np.isfinite(stress), bar_colors):
-        if has_data:
-            ax.bar(xi, 1, width=1.0, align="edge", color=color, alpha=0.65, zorder=1)
+    base_h = int(sorted(slot_map.keys())[0])
+    slots = []
+    for i in range(slot_count):
+        h = (base_h + i) % 24
+        key = f"{h:02d}"
+        val = slot_map.get(key, np.nan)
+        if pd.isna(val):
+            state = "n"
+        elif int(val) == 1:
+            state = "s"
         else:
-            ax.bar(xi, 1, width=1.0, align="edge", color=COLOR_NODATA, alpha=0.4, zorder=1)
+            state = "c"
+        slots.append({"h": key, "s": state})
 
-    for xi in x_idx[1:]:
-        ax.axvline(x=xi, color="#cccccc", linewidth=0.6, zorder=2)
+    shift_labels = {
+        "day": "주간", "night": "야간", "off": "비번",
+        "duty": "당직", "holiday": "휴무",
+    }
+    shift_label = shift_labels.get(shift_type, shift_type)
+    hour_label = "24시간" if is_duty else "12시간"
+    badge_color = "duty" if is_duty else "day"
 
-    ax.set_ylim(0, 1)
-    ax.set_yticks([])
-    ax.set_xticks(x_idx + 0.5)
-    ax.set_xticklabels(times, rotation=0, ha="center", fontsize=tick_fontsize)
-    ax.tick_params(axis="x", colors="#222222", length=0)
-    ax.spines["top"].set_visible(False)
-    ax.spines["left"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["bottom"].set_color("#cccccc")
+    def make_row_html(row_slots):
+        time_cells = "".join(f'<div class="bio-tlbl">{d["h"]}</div>' for d in row_slots)
+        tile_cells = "".join(f'<div class="bio-tile bio-tile--{d["s"]}"></div>' for d in row_slots)
+        return (
+            f'<div class="bio-timerow">{time_cells}</div>'
+            f'<div class="bio-tilerow">{tile_cells}</div>'
+        )
 
-    legend_patches = [
-        Patch(facecolor=COLOR_STRESS, alpha=0.65, label="스트레스"),
-        Patch(facecolor=COLOR_CALM,   alpha=0.65, label="안정"),
-        Patch(facecolor=COLOR_NODATA, alpha=0.4,  label="데이터 없음"),
-    ]
-    ax.legend(
-        handles=legend_patches,
-        loc="lower center",
-        bbox_to_anchor=(0.5, 1.08),
-        ncol=3,
-        fontsize=10,
-        framealpha=0.0,
-        edgecolor="none",
+    if is_duty:
+        rows_html = (
+            '<div class="bio-rowlabel">오전</div>'
+            + make_row_html(slots[:12])
+            + '<div class="bio-rowlabel" style="margin-top:8px;">오후</div>'
+            + make_row_html(slots[12:])
+        )
+    else:
+        rows_html = make_row_html(slots)
+
+    html = (
+        '<div class="bio-card">'
+        '<div class="bio-head">'
+        '<span class="bio-title">오늘의 신체 상태</span>'
+        f'<span class="bio-badge bio-badge--{badge_color}">{shift_label} · {hour_label}</span>'
+        '</div>'
+        '<div class="bio-legend">'
+        '<span class="bio-leg"><span class="bio-dot bio-dot--s"></span>스트레스</span>'
+        '<span class="bio-leg"><span class="bio-dot bio-dot--c"></span>안정</span>'
+        '<span class="bio-leg"><span class="bio-dot bio-dot--n"></span>데이터 없음</span>'
+        '</div>'
+        f'<div class="bio-body">{rows_html}</div>'
+        '</div>'
+        '<style>'
+        '.bio-card{background:#fff;border:0.5px solid #e0e0e0;border-radius:12px;padding:14px 16px 12px;max-width:100%;box-sizing:border-box;}'
+        '.bio-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}'
+        '.bio-title{font-size:13px;font-weight:500;color:#111;}'
+        '.bio-badge{font-size:11px;padding:2px 8px;border-radius:10px;}'
+        '.bio-badge--day{background:#E6F1FB;color:#185FA5;}'
+        '.bio-badge--duty{background:#FAEEDA;color:#854F0B;}'
+        '.bio-legend{display:flex;gap:12px;margin-bottom:10px;}'
+        '.bio-leg{display:flex;align-items:center;gap:4px;font-size:11px;color:#666;}'
+        '.bio-dot{display:inline-block;width:10px;height:10px;border-radius:2px;flex-shrink:0;}'
+        '.bio-dot--s{background:#F09595;}'
+        '.bio-dot--c{background:#85B7EB;}'
+        '.bio-dot--n{background:#ebebeb;border:0.5px solid #ccc;}'
+        '.bio-rowlabel{font-size:10px;color:#999;margin-bottom:2px;}'
+        '.bio-timerow{display:flex;}'
+        '.bio-tlbl{flex:1;text-align:center;font-size:10px;color:#aaa;padding-bottom:3px;}'
+        '.bio-tilerow{display:flex;gap:2px;}'
+        '.bio-tile{flex:1;height:32px;border-radius:3px;}'
+        '.bio-tile--s{background:#F09595;}'
+        '.bio-tile--c{background:#85B7EB;}'
+        '.bio-tile--n{background:#ebebeb;border:0.5px solid #ddd;}'
+        '</style>'
     )
+    return html
 
-    fig.suptitle(
-        f"오늘의 신체 상태  |  {shift_label} · {hour_label}",
-        fontsize=13, fontweight="bold", color="#222222", y=1.28,
-    )
-    fig.tight_layout()
-    fig.subplots_adjust(bottom=0.28)
-
-    fig.text(
-        0.5, -0.12,
-        "* 스트레스/안정 구분은 심박수 외 여러 HRV 지표를 종합해 판단합니다.",
-        ha="center", fontsize=10, color="#666666",
-    )
-
-    sid = session_id or "nosess"
-    img_name = f"biosignal_{sid}_{uuid.uuid4().hex[:8]}.png"
-    img_path = os.path.join(save_dir, img_name)
-    fig.savefig(img_path, bbox_inches="tight", facecolor="#fafafa")
-    plt.close(fig)
-
-    return f"/plots/{prt}/{day}/{img_name}"
 
 def get_validation_data(state: dict):
     analyses_raw = state.get("analyses", []) or []
@@ -294,18 +243,8 @@ def get_validation_data(state: dict):
     if not parsed:
         return {
             "random_turns": [
-                {
-                    "original_text": "",
-                    "prev_ai_text": "",
-                    "situation": "",
-                    "emotion": {"main": "", "sub": ""},
-                },
-                {
-                    "original_text": "",
-                    "prev_ai_text": "",
-                    "situation": "",
-                    "emotion": {"main": "", "sub": ""},
-                },
+                {"original_text": "", "prev_ai_text": "", "situation": "", "emotion": {"main": "", "sub": ""}},
+                {"original_text": "", "prev_ai_text": "", "situation": "", "emotion": {"main": "", "sub": ""}},
             ],
             "top_emotions": [],
         }
@@ -342,18 +281,13 @@ def get_validation_data(state: dict):
 
     while len(sampled_turns) < 2:
         sampled_turns.append(sampled_turns[0] if sampled_turns else {
-            "original_text": "",
-            "prev_ai_text": "",
-            "situation": "",
-            "main": "",
-            "sub": "",
+            "original_text": "", "prev_ai_text": "", "situation": "", "main": "", "sub": "",
         })
 
     emotion_totals: Dict[str, float] = {}
     for item in parsed:
         main_item = item["main"]
         sub_item = item["sub"]
-
         if main_item and main_item != "unknown":
             emotion_totals[main_item] = emotion_totals.get(main_item, 0.0) + 1.0
         if sub_item:
@@ -361,9 +295,7 @@ def get_validation_data(state: dict):
 
     top_3_emotions = [
         label for label, _ in sorted(
-            emotion_totals.items(),
-            key=lambda x: x[1],
-            reverse=True,
+            emotion_totals.items(), key=lambda x: x[1], reverse=True,
         )[:3]
     ]
 
@@ -373,10 +305,7 @@ def get_validation_data(state: dict):
                 "original_text": item["original_text"],
                 "prev_ai_text": item.get("prev_ai_text", ""),
                 "situation": item["situation"],
-                "emotion": {
-                    "main": item["main"],
-                    "sub": item["sub"],
-                },
+                "emotion": {"main": item["main"], "sub": item["sub"]},
             }
             for item in sampled_turns[:2]
         ],
