@@ -239,7 +239,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     if is_data_sufficient:
         plot_path = make_biosignal_overview_plot(
             valid_signals=valid_signals,
-            session_id=sid, prt=prt, day=day,
+            session_id=sid, prt=prt, day=day, shift_type=shift_type,
         )
 
     try:
