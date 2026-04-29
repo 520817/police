@@ -794,7 +794,7 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
         print(f"[predict] using client session_id: {session_id}")
     else:
         now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
-        session_id = f"{prt}_{now_kst.strftime('%Y-%m-%d')}_{now_kst.strftime('%H%M%S')}"
+        session_id = f"{prt}_{now_kst.strftime('%Y-%m-%d')}"
         print(f"[predict] generated new session_id: {session_id}")
 
     config = {"configurable": {"thread_id": session_id}}
