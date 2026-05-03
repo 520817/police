@@ -13,7 +13,7 @@ from simple_police_bio import predict, SESSION_STATES, get_graph
 
 # --------------------------------------------------------------
 # TEST 모드: CSV 기반 테스트를 위해 prt/day를 고정
-USE_FIXED_TEST_CONTEXT = True
+USE_FIXED_TEST_CONTEXT = false
 TEST_PRT = "01011112222"
 TEST_DAY = "2026-04-24"
 TEST_DATETIME = datetime(2026, 4, 24, 18, 0, 0)
