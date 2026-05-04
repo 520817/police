@@ -203,7 +203,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
                 valid_signals.append(record)
 
     valid_record_count = len(valid_signals)
-    is_data_sufficient = valid_record_count >= 3
+    is_data_sufficient = valid_record_count >= 4
 
     signals_to_send = remove_ppg_prefix(valid_signals)
     signals_json = json.dumps(signals_to_send, ensure_ascii=False)
