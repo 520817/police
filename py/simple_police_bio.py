@@ -193,7 +193,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     if state.get("biosignal_consent", "unknown") != "accepted":
         return {"logs": ["biosignal_skip_no_consent"], "biosignal_first_emit": False}
 
-    signals_all_slots = state.get("biosignal", {}) or {}
+    signals_all_slots = state.get("biosignal") or []
 
     valid_signals = []
     if isinstance(signals_all_slots, list):
@@ -205,17 +205,62 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     valid_record_count = len(valid_signals)
     is_data_sufficient = valid_record_count >= 4
 
-    signals_to_send = remove_ppg_prefix(valid_signals)
-    signals_json = json.dumps(signals_to_send, ensure_ascii=False)
-
     dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
 
     print("="*50)
-    print("[DEBUG] AI에게 전달되는 signals_json:")
-    print(signals_json)
     print("[DEBUG] valid_record_count:", valid_record_count)
     print("[DEBUG] is_data_sufficient:", is_data_sufficient)
     print("="*50)
+
+    # plot은 동의하면 무조건: HR 필터 전 전체 슬롯 기준
+    all_slots_list = signals_all_slots if isinstance(signals_all_slots, list) else []
+    bio_html = make_biosignal_html(valid_signals=all_slots_list, shift_type=shift_type)
+
+    # 4개 미만이면 LLM 호출 없이 바로 처리 (declined와 동일하게 생체신호 미사용)
+    if not is_data_sufficient:
+        insufficient_msg = "경찰관님, 안녕하세요. 이번 회차의 생체 신호를 확인했으나, 측정된 데이터 기록이 부족하여 의미 있는 시간대별 분석을 제공해 드리기 어렵습니다. 데이터가 충분히 누적되면 다음 분석 시에 다시 한 번 자세히 살펴보도록 하겠습니다."
+        opening_q = DEFAULT_OPENING_Q
+        support_suffix = DEFAULT_SUPPORT_SUFFIX
+        try:
+            save_biosignal_log(
+                session_id=state["meta"]["session_id"],
+                biosignal_result=insufficient_msg,
+                biosignal_summary="",
+                opening_question="",
+                valid_record_count=valid_record_count,
+                plot_path=None,
+            )
+        except Exception as e:
+            print(f"[DB Error] Biosignal log save failed: {e}")
+        try:
+            save_chat_message(
+                session_id=state["meta"]["session_id"],
+                role="ai",
+                content=f"{insufficient_msg}\n{opening_q}\n{support_suffix}".strip(),
+            )
+        except Exception as e:
+            print(f"[DB Error] Biosignal first message save failed: {e}")
+        return {
+            "biosignal_done": True,
+            "biosignal_first_emit": True,
+            "biosignal_last": {
+                "biosignal_result": insufficient_msg,
+                "biosignal_summary": "",
+                "bio_html": bio_html,
+            },
+            "messages": [
+                AIMessage(content=insufficient_msg, name="biosignal"),
+                AIMessage(content=f"{opening_q}\n{support_suffix}".strip(), name="biosignal"),
+            ],
+            "logs": ["biosignal_insufficient"],
+        }
+
+    # 4개 이상: LLM 분석
+    signals_to_send = remove_ppg_prefix(valid_signals)
+    signals_json = json.dumps(signals_to_send, ensure_ascii=False)
+
+    print("[DEBUG] AI에게 전달되는 signals_json:")
+    print(signals_json)
 
     result: BiosignalAnalysis = biosignal_analyzer_chain.invoke({
         "signals_json": signals_json,
@@ -236,10 +281,6 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     support_suffix = DEFAULT_SUPPORT_SUFFIX
     msg_opening = AIMessage(content=f"{opening_q}\n{support_suffix}".strip(), name="biosignal")
 
-    bio_html = make_biosignal_html(
-    valid_signals=valid_signals,
-    shift_type=shift_type,
-)
     try:
         save_biosignal_log(
             session_id=state["meta"]["session_id"],
@@ -247,7 +288,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             biosignal_summary=payload.get("biosignal_summary", ""),
             opening_question=payload.get("opening_question", ""),
             valid_record_count=valid_record_count,
-            plot_path=None, 
+            plot_path=None,
         )
     except Exception as e:
         print(f"[DB Error] Biosignal log save failed: {e}")
@@ -867,6 +908,7 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
                 target_hours=12,
                 start_datetime=datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None),
                 # 테스트용: start_datetime=datetime(2026, 4, 24, 18, 0, 0),
+                shift_type=shift_type,
             )
             inputs["biosignal"] = records if records else {}
             records_count = len(records) if isinstance(records, list) else 0
