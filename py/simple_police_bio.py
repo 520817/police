@@ -203,7 +203,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
                 valid_signals.append(record)
 
     valid_record_count = len(valid_signals)
-    is_data_sufficient = valid_record_count >= 6
+    is_data_sufficient = valid_record_count >= 3
 
     signals_to_send = remove_ppg_prefix(valid_signals)
     signals_json = json.dumps(signals_to_send, ensure_ascii=False)
@@ -236,13 +236,10 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     support_suffix = DEFAULT_SUPPORT_SUFFIX
     msg_opening = AIMessage(content=f"{opening_q}\n{support_suffix}".strip(), name="biosignal")
 
-    bio_html = None
-    if is_data_sufficient:
-        bio_html = make_biosignal_html(
-            valid_signals=valid_signals,
-            shift_type=shift_type,
-        )
-
+    bio_html = make_biosignal_html(
+    valid_signals=valid_signals,
+    shift_type=shift_type,
+)
     try:
         save_biosignal_log(
             session_id=state["meta"]["session_id"],
