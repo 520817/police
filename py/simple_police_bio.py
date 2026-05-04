@@ -863,7 +863,14 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
     records_count = 0
     if target_consent == "accepted" and (force_biosignal_rerun or (not current_state.get("biosignal"))):
         try:
-            records = get_biosignal_records(prt=prt, day=day, collection_type="Automatic", target_hours=12,  start_datetime=datetime(2026, 4, 24, 18, 0, 0),  # 테스트용 start_datetime=datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None),
+            records = get_biosignal_records(
+                prt=prt,
+                day=day,
+                collection_type="Automatic",
+                target_hours=12,
+                start_datetime=datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None),
+                # 테스트용: start_datetime=datetime(2026, 4, 24, 18, 0, 0),
+            )
             inputs["biosignal"] = records if records else {}
             records_count = len(records) if isinstance(records, list) else 0
 
