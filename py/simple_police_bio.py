@@ -527,6 +527,8 @@ def analyzer_node(state: AppState, analyzer_chain):
 
     dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
     biosignal_summary = state.get("biosignal_last", {}).get("biosignal_summary", "")
+    if not biosignal_summary:
+        biosignal_summary = "생체신호 데이터 없음. 생체신호 관련 내용 일절 언급 금지."
 
     history = build_full_history(state, max_msgs=24)
     if history and isinstance(history[-1], HumanMessage):
