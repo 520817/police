@@ -79,48 +79,44 @@ def make_biosignal_html(
     valid_signals,
     shift_type: str = "day",
 ) -> str | None:
-    if not valid_signals:
-        return None
-
-    df = pd.DataFrame(valid_signals)
-    time_col = "time"
-    stress_col = "Stress"
-
-    if time_col not in df.columns:
-        return None
-    df = df[df[time_col].notna()].copy()
-    if df.empty:
-        return None
-
-    if stress_col in df.columns:
-        df[stress_col] = pd.to_numeric(df[stress_col], errors="coerce")
-    else:
-        df[stress_col] = np.nan
-
-    df["_dt"] = _parse_dt_series(
-        df[time_col].iloc[0][:10] if str(df[time_col].iloc[0]).count("-") >= 2
-        else str(pd.Timestamp.today().date()),
-        df[time_col].astype(str),
-    )
-    df = df[df["_dt"].notna()].copy()
-    if df.empty:
-        return None
-
-    df = df.sort_values("_dt")
     slot_map = {}
-    for _, row in df.iterrows():
-        h = row["_dt"].hour
-        key = f"{h:02d}"
-        if key not in slot_map:
-            slot_map[key] = row.get(stress_col, np.nan)
 
-    if not slot_map:
-        return None
+    if valid_signals:
+        df = pd.DataFrame(valid_signals)
+        time_col = "time"
+        stress_col = "Stress"
+
+        if time_col not in df.columns:
+            return None
+        df = df[df[time_col].notna()].copy()
+
+        if not df.empty:
+            if stress_col in df.columns:
+                df[stress_col] = pd.to_numeric(df[stress_col], errors="coerce")
+            else:
+                df[stress_col] = np.nan
+
+            df["_dt"] = _parse_dt_series(
+                df[time_col].iloc[0][:10] if str(df[time_col].iloc[0]).count("-") >= 2
+                else str(pd.Timestamp.today().date()),
+                df[time_col].astype(str),
+            )
+            df = df[df["_dt"].notna()].copy()
+
+            df = df.sort_values("_dt")
+            for _, row in df.iterrows():
+                h = row["_dt"].hour
+                key = f"{h:02d}"
+                if key not in slot_map:
+                    slot_map[key] = row.get(stress_col, np.nan)
 
     is_duty = shift_type == "duty"
     slot_count = 24 if is_duty else 12
 
-    base_h = int(sorted(slot_map.keys())[0])
+    if slot_map:
+        base_h = int(sorted(slot_map.keys())[0])
+    else:
+        base_h = 22 if shift_type == "night" else 9
     slots = []
     for i in range(slot_count):
         h = (base_h + i) % 24
