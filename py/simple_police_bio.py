@@ -437,22 +437,6 @@ def build_full_history(state: AppState, max_msgs: int = 24):
     msgs = [m for m in msgs if not (isinstance(m, AIMessage) and getattr(m, "name", None) == "biosignal")]
     return msgs[-max_msgs:] if len(msgs) > max_msgs else msgs
 
-def extract_current_focus(thought: str) -> str:
-    normalized = thought.replace("\\n", "\n")
-    
-    # [다음 응답 방향] 이후 텍스트 전체를 가져오는 방식으로 변경
-    marker = "[다음 응답 방향]"
-    idx = normalized.find(marker)
-    if idx == -1:
-        return normalized  # fallback
-    
-    after = normalized[idx + len(marker):].strip()
-    # 다음 섹션 시작 전까지만 자르기
-    for stop in ["[관찰]", "[해석]", "[기확인]"]:
-        stop_idx = after.find(stop)
-        if stop_idx != -1:
-            after = after[:stop_idx].strip()
-    return after
 
 def create_analyzer_chain(llm):
     prompt = ChatPromptTemplate.from_messages(
@@ -632,9 +616,9 @@ dept: {dept} / user_rank: {user_rank} / shift_type: {shift_type}
 situation: {situation}
 emotion: {emotion}
 
-[최우선 실행 지침]
-**[다음 응답 방향]: {current_focus}**
-(위 지침을 최우선으로 따르되, 아래의 공감 원칙을 적용하라.)
+[분석 맥락 및 응답 방향]
+{analyzer_thought}
+(위 thought의 [다음 응답 방향]을 최우선으로 따르되, 아래의 공감 원칙을 적용하라. 분석 내용 자체는 응답에 직접 드러내지 말 것.)
 
 [데이터 활용 판단 — Responder 자체 기준]
 analyzer가 데이터 활용을 지시했더라도, 사용자가 이미 해당 상황을 충분히 설명했다면:
@@ -648,9 +632,9 @@ analyzer가 데이터 활용을 지시했더라도, 사용자가 이미 해당 �
 ✅ 자연스러운 표현: "그 시간대에 몸이 먼저 반응했던 것 같은데", "그 시간대에 몸이 무언가에 반응하고 있던 흔적이 있는 걸 보니, 마음도 참 고생 많으셨겠어요."
 
 [종결 관련 엄격한 제한]
-- [종결 확인] 또는 [최종 요약 및 인사] 지시가 current_focus에 명시적으로 포함된 경우에만 마무리 문장을 생성할 수 있다.
+- [종결 확인] 또는 [최종 요약 및 인사] 지시가 analyzer_thought의 [다음 응답 방향]에 명시적으로 포함된 경우에만 마무리 문장을 생성할 수 있다.
 - "고생 많으셨습니다", "푹 쉬세요", "편안한 밤 되세요" 등 종결성 문장은 위 지시 없이는 절대 사용하지 않는다.
-- current_focus에 종결 지시가 없으면 반드시 열린 질문으로 끝낸다.
+- [다음 응답 방향]에 종결 지시가 없으면 반드시 열린 질문으로 끝낸다.
 
 [응답 형식 — 2문단]
 1문단: 사용자의 말 뒤에 담긴 감정과 맥락을 읽고 공감한다. **절대 사용자의 말을 그대로 반복(앵무새)하지 마라.**
@@ -670,37 +654,37 @@ def create_responder_chain(llm):
         ("system", RESPONDER_SYS),
 
         # ── 케이스 1: 데이터로 설명 공백 채우기 ─────────────────────────────────
-        ("system", "current_focus=몸이 무겁다는 감각을 받아주고, 밤 9시~11시 긴장 신호 뚜렷함을 연결해 이유를 설명할 것"),
+        ("system", "analyzer_thought=[관찰] '몸이 무거운 느낌' 신체적 피로 표현, 원인 설명 못함. [해석] 설명 공백, 첫 연결 단계. ✅ 데이터 활용. [다음 응답 방향] 몸이 무겁다는 감각을 받아주고, 밤 9시~11시 긴장 신호 뚜렷함을 연결해 이유를 설명할 것"),
         ("human", "그냥 퇴근하고 나서 이상하게 몸이 무거운 느낌?"),
         ("ai", "긴장 상태가 길게 이어지다 보면 퇴근하고 나서도 몸이 그 긴장을 쉽게 내려놓지 못하는 경우가 많아요.\\n\\n실제로 밤 9시에서 11시 사이에 신체 긴장 신호가 꽤 뚜렷하게 나타났던데, 혹시 그 무렵 신경 쓰이는 일이 있으셨나요?"),
         
         # ── 케이스 2: 사용자가 이미 설명 → 데이터 생략, 감정에 집중 ───────────
-        ("system", "current_focus=데이터 언급 없이 감정에만 집중. 손이 떨렸다는 신체 반응을 받아줄 것"),
+        ("system", "analyzer_thought=[관찰] 아동학대 현장 구체적 사건과 신체 반응 진술. 사용자가 상황 충분히 설명함. [해석] 데이터 재언급은 단순 반복. ❌ 데이터 미활용. [다음 응답 방향] 데이터 언급 없이 감정에만 집중. 손이 떨렸다는 신체 반응을 받아줄 것"),
         ("human", "21시에 진짜 힘든 신고 받았어요. 아동학대 의심이었는데 가보니까 진짜더라고요. 손이 떨렸어요."),
         ("ai", "그런 참혹한 현장을 마주하고 손이 떨렸다는 건, 경찰관이기 이전에 한 사람으로서 너무나 당연한 반응이에요. 아무리 단단히 마음을 먹어도 충격이 가시지 않을 만한 상황이었네요.\\n\\n그 순간 마음속에 어떤 감정이 가장 크게 올라왔나요?"),
         
         # ── 케이스 3: 프로필 가설로 접근 ─────────────────────────────────
-        ("system", "current_focus=수사 경위 특성상 오후 업무 몰림을 언급하며 15시 반응을 연결할 것"),
+        ("system", "analyzer_thought=[관찰] '힘빠지는 느낌' 막연한 피로 표현, 원인 모름. [해석] 설명 공백. ✅ 데이터 활용, 프로필 가설 접근. [다음 응답 방향] 수사 경위 특성상 오후 업무 몰림을 언급하며 15시 반응을 연결할 것"),
         ("human", "모르겠어. 그냥 오후부터 뭔가 힘빠지는 느낌?"),
         ("ai", "수사팀 업무 특성상 오후에는 서류 검토나 집중이 필요한 보고 업무가 몰리는 경우가 많잖아요. 몸이 그 부담을 먼저 느끼고 신호를 보냈을 수도 있을 것 같아요.\\n\\n어제 오후 3시쯤에 신체 신호가 꽤 가라앉아 있던데, 혹시 당시 처리해야 할 업무가 많으셨나요?"),
         
         # ── 케이스 4: 일상 대화 → 온도 맞춰 가볍게 ────────────────────────────
-        ("system", "current_focus=데이터 언급 없이 치킨 얘기에 자연스럽게 맞장구치며 가벼운 대화 유지"),
+        ("system", "analyzer_thought=[관찰] 치킨 언급, 가벼운 말투. 새로운 고충 없음. [해석] 일상 소재, 대화 온도 가벼움. ❌ 데이터 미활용. [다음 응답 방향] 데이터 언급 없이 치킨 얘기에 자연스럽게 맞장구치며 가벼운 대화 유지"),
         ("human", "그냥 치킨 시켜먹었어요 ㅋㅋ 오랜만에"),
         ("ai", "치킨이요, 오랜만에 잘 하셨네요 ㅎㅎ 어디 시키셨어요?"),
         
         # ── 케이스 5: 종결 확인 - 요약 없이 의사만 묻기 ────────────────────────────
-        ("system", "current_focus=[종결 확인] 요약하지 말고, 대화가 정리되었는지 아니면 더 할 말이 남았는지 정중히 물어볼 것"),
+        ("system", "analyzer_thought=[관찰] 감사 표현 + 정서 회복 언급. 10턴 이상 진행됨. [해석] 종결 트리거 조건 충족. [다음 응답 방향] [종결 확인] 요약하지 말고, 대화가 정리되었는지 아니면 더 할 말이 남았는지 정중히 물어볼 것"),
         ("human", "오늘 고마워. 얘기하니까 좀 낫네."),
         ("ai", "이야기를 나누다 보니 어느덧 시간이 훌쩍 지났네요. 경찰관님 마음이 조금이나마 가벼워지셨다니 정말 다행입니다.\\n\\n오늘 대화는 이 정도로 정리가 좀 되셨을까요? 아니면 아직 마음속에 남은 이야기가 더 있으신가요?"),
         
         # ── 케이스 6: 최종 요약 및 인사 - 감정을 엮은 서사적 갈무리 ─────────────────────
-        ("system", "current_focus=[최종 요약 및 인사] 오늘 나눈 흐름을 감정 중심으로 엮어 통합 요약을 제공할 것"),
+        ("system", "analyzer_thought=[관찰] 명시적 종료 동의. 이전 턴의 종결 확인 질문에 수락. [해석] 완전한 종결 시점. [다음 응답 방향] [최종 요약 및 인사] 오늘 나눈 흐름을 감정 중심으로 엮어 통합 요약을 제공할 것"),
         ("human", "응 이제 마무리 할래. 고마워."),
         ("ai", "네, 경찰관님. 오늘 취객들 때문에 처음엔 정말 화가 나고 손까지 떨리셨는데, 그래도 든든한 동료들 덕분에 안도하며 하루를 마무리할 수 있어서 정말 다행입니다.\\n\\n밤 23시쯤 신체가 보냈던 긴장 신호들도 결국 경사님으로서 그 현장을 꾹 참고 버텨내느라 애썼던 마음의 흔적이었던 것 같아요. 오늘 정말 고생 많으셨습니다.\\n\\n이제 무거운 마음은 여기 다 내려놓으시고, 부디 누구보다 편안하고 따뜻한 밤 되시길 바랄게요."),
 
         # 케이스 7: 탐색 실패 후 전환 - 반드시 열린 질문으로 마무리
-        ("system", "current_focus=데이터 탐색 내려놓고 퇴근 후 상태로 화제 전환. 질문으로 마무리."),
+        ("system", "analyzer_thought=[관찰] '큰 일 없었고' 특별한 사건 없음. [해석] 데이터 탐색 공백, 화제 전환 필요. ❌ 데이터 미활용. [다음 응답 방향] 데이터 탐색 내려놓고 퇴근 후 상태로 화제 전환. 질문으로 마무리."),
         ("human", "그냥 대기했어 큰 일 없었고"),
         ("ai", "대기 중에도 몸은 나름대로 긴장을 유지하고 있을 때가 있거든요. 딱히 사건이 없었어도 그럴 수 있어요.\n\n퇴근하고 나서 지금 몸 상태는 어때요? 피곤한 편인가요?"),
         
@@ -708,8 +692,8 @@ def create_responder_chain(llm):
 
         MessagesPlaceholder("full_history", optional=True),
         ("system",
-         "[재확인] [다음 응답 방향]: {current_focus}\n"
-         "위 방향에만 집중해서 응답하라."),
+         "[재확인] analyzer_thought:\n{analyzer_thought}\n"
+         "위 [다음 응답 방향]에 집중해서 응답하라."),
     ])
     return prompt | llm | StrOutputParser()
 
@@ -738,7 +722,14 @@ def responder_node(state: AppState, responder_chain) -> AppState:
     history = build_full_history(state, max_msgs=24)
 
     thought = analysis.get("thought", "")
-    current_focus = extract_current_focus(thought)
+
+    total_turns = len([
+        m for m in state.get("messages", [])
+        if isinstance(m, (HumanMessage, AIMessage))
+        and getattr(m, "name", None) != "biosignal"
+    ])
+    if total_turns < 10 and any(marker in thought for marker in ["[종결 확인]", "[최종 요약 및 인사]"]):
+        thought += "\n\n[시스템] 현재 대화 턴 미달. 종결 지시 무효. 반드시 열린 질문으로 대화를 이어갈 것."
 
     inputs = {
         "situation": situation,
@@ -747,7 +738,7 @@ def responder_node(state: AppState, responder_chain) -> AppState:
         "dept": dept,
         "user_rank": user_rank,
         "shift_type": shift_type,
-        "current_focus": current_focus,
+        "analyzer_thought": thought,
         "full_history": history,
     }
     raw_ai_output: str = responder_chain.invoke(inputs)
