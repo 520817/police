@@ -539,7 +539,9 @@ def analyzer_node(state: AppState, analyzer_chain):
     prev_ai_text = str(getattr(last_ai, "content", "") or "").strip()
 
 
-    human_turn_count = sum(1 for m in state.get("messages", []) if isinstance(m, HumanMessage))
+    session_start = state.get("session_start_msg_idx", 0) or 0
+    session_msgs = state.get("messages", [])[session_start:]
+    human_turn_count = sum(1 for m in session_msgs if isinstance(m, HumanMessage))
     result: AnalysisResult = analyzer_chain.invoke({
         "dept": dept,
         "user_rank": user_rank,
@@ -723,8 +725,10 @@ def responder_node(state: AppState, responder_chain) -> AppState:
 
     thought = analysis.get("thought", "")
 
+    session_start = state.get("session_start_msg_idx", 0) or 0
+    session_msgs = state.get("messages", [])[session_start:]
     total_turns = len([
-        m for m in state.get("messages", [])
+        m for m in session_msgs
         if isinstance(m, (HumanMessage, AIMessage))
         and getattr(m, "name", None) != "biosignal"
     ])
