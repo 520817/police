@@ -747,7 +747,7 @@ def responder_node(state: AppState, responder_chain) -> AppState:
     session_start = state.get("session_start_msg_idx", 0) or 0
     session_msgs = state.get("messages", [])[session_start:]
     human_turn_count = sum(1 for m in session_msgs if isinstance(m, HumanMessage))
-    if human_turn_count < 10 and any(marker in thought for marker in ["[종결 확인]", "[최종 요약 및 인사]"]):
+    if human_turn_count < 10:
         thought += "\n\n[시스템] 현재 대화 턴 미달. 종결 지시 무효. 반드시 열린 질문으로 대화를 이어갈 것."
 
     inputs = {
