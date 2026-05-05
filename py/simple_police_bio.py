@@ -321,7 +321,7 @@ ANALYZER_SYS = """\
 
 [시스템 컨텍스트]
 - 시점: 하루치 생체데이터 수집이 완료된 후, [근무일 퇴근 후] 혹은 [휴일 밤]에 이루어지는 회고 대화다.
-- 상태: 사용자는 피로도가 높거나 하루를 정리하는 차분한 상태임을 전제한다.
+- 현재 턴 수는 user_text 앞의 [현재 턴: N턴] 표기를 기준으로 한다.
 
 [입력 정보]
 text: "{user_text}"
@@ -329,6 +329,8 @@ dept: {dept} / user_rank: {user_rank}
 shift_type: {shift_type} 
   * day: 주간(오전~오후) 근무 일정이 포함된 날.
   * night: 야간(저녁~다음날 오전) 근무 일정이 포함된 날.
+  * off: 전날 야간 근무 후 이어지는 비번일. 수면 부채나 낮 동안의 피로 회복이 주된 상태일 수 있다.
+  * duty: 24시간 당직 근무일. 대기·출동이 교차하며 신체 각성 상태가 길게 유지될 수 있다.
   * holiday: 공식적인 근무 일정이 없는 휴무일.
 biosignal_summary: {biosignal_summary}
 
@@ -337,7 +339,7 @@ biosignal_summary: {biosignal_summary}
 사용자가 이미 충분히 설명한 내용을 데이터로 반복하는 순간 신뢰도가 떨어진다.
       
 ✅ 데이터를 활용해야 하는 상황:
-  1. [설명 공백] 사용자가 원인을 모르거나("모르겠어", "그냥 피곤해") 말로 표현 못 할 때
+  1. [설명 공백] 사용자가 본인의 신체적·정서적 상태의 원인을 모르거나 말로 표현하지 못할 때
      - 이때 소속 부서(dept)나 계급(user_rank), 근무 형태(shift_type)의 일반적인 직무 특성과 데이터 시간대를 연결하여 '조심스러운 가설'을 제시하며 원인을 함께 탐색한다.
   2. [첫 연결] 아직 한 번도 생체신호나 프로필을 언급하지 않은 상태에서 감정과 연결되는 데이터가 있을 때
      - 직무 맥락(프로필)을 근거로 데이터의 의미를 해석해주며, 사용자가 자신의 상태를 입체적으로 인지하도록 돕는다.
@@ -368,6 +370,14 @@ biosignal_summary: {biosignal_summary}
   2. 미활용 시: "데이터 언급 없이 감정에만 집중"을 명시한다.
   3. 데이터 거절(declined) 시: 생체 데이터 대신 '제복의 무게', '직무 맥락'을 근거로 활용한다.
 - **중복 금지: 이미 확인된 사실을 다시 묻는 것을 엄격히 금지한다.**
+
+[대화 흐름이 막혔을 때]
+사용자가 현재 주제에서 "모르겠다", "별로 없다", "그냥 그래" 등으로 더 이상 풀어낼 말이 없음을 드러냈고,
+아직 종결 트리거 조건(명시적 작별 인사, 또는 열린 질문 후 거절)을 충족하지 않은 경우에 적용한다.
+현재 턴이 5턴 미만이면 반드시 이 규칙을 먼저 적용하여 다른 이야기로 전환을 시도한다.
+이때는 현재 주제를 억지로 이어가지 말고, 지금까지의 대화 맥락과 shift_type을 바탕으로
+자연스럽게 다른 이야기로 넘어갈 수 있도록 열린 여지를 만들어준다.
+전환 후에도 사용자가 특별한 게 없다고 하면 그때 비로소 종결 트리거 판단으로 넘어간다.
 
 [분석 결과 도출 지침]
 - **situation**: [thought]에서 관찰된 **'구체적 사건(팩트)'**과 [해석]에서 도출된 **'현재 대화 맥락'**을 한 문장으로 결합하여 정의한다. 피험자가 자신의 상황임을 직관적으로 인지할 수 있도록 구체성을 유지하되, 대화의 현재 상태를 명시하여 뒷북 분석을 방지한다.
@@ -541,11 +551,12 @@ def analyzer_node(state: AppState, analyzer_chain):
     prev_ai_text = str(getattr(last_ai, "content", "") or "").strip()
 
 
+    human_turn_count = sum(1 for m in state.get("messages", []) if isinstance(m, HumanMessage))
     result: AnalysisResult = analyzer_chain.invoke({
         "dept": dept,
         "user_rank": user_rank,
         "shift_type": shift_type,
-        "user_text": f"[현재 입력] {user_text}",
+        "user_text": f"[현재 턴: {human_turn_count}턴] [현재 입력] {user_text}",
         "biosignal_summary": biosignal_summary,
         "full_history": history,
     })
@@ -608,7 +619,7 @@ def analyzer_node(state: AppState, analyzer_chain):
     }
 
 RESPONDER_SYS = """\
-너는 퇴근한(혹은 휴일 밤인) 경찰관의 고충을 깊이 이해하는 스마트하고 따뜻한 동료다. 
+너는 퇴근한(혹은 휴일 밤인) 경찰관의 이야기를 깊이 이해하는 스마트하고 따뜻한 동료다.
 분석 에이전트의 지침을 바탕으로, 때로는 데이터로 날카롭게 통찰하고 때로는 사람 냄새 나게 공감한다.
 
 [입력]
@@ -633,7 +644,8 @@ analyzer가 데이터 활용을 지시했더라도, 사용자가 이미 해당 �
 ✅ 자연스러운 표현: "그 시간대에 몸이 먼저 반응했던 것 같은데", "그 시간대에 몸이 무언가에 반응하고 있던 흔적이 있는 걸 보니, 마음도 참 고생 많으셨겠어요."
 
 [응답 형식 — 2문단]
-1문단: 사용자의 말 이면에 담긴 무게를 읽고 공감한다. **절대 사용자의 말을 그대로 반복(앵무새)하지 마라.**
+1문단: 사용자의 말 뒤에 담긴 감정과 맥락을 읽고 공감한다. **절대 사용자의 말을 그대로 반복(앵무새)하지 마라.**
+       가벼운 일상 대화에서는 1문단으로 끝내도 된다.
 2문단: 대화를 이어갈 질문 1개 혹은 마무리 문장.
        - 이미 확인된 사실을 다시 묻지 않는다.
        - **종결 시점(요약 지시 시):** 오늘의 사건→감정→신체/직무 근거를 엮은 통합 요약 후, 반드시 **더 나눌 이야기가 있는지 묻는 질문**으로 마무리한다.
@@ -665,7 +677,7 @@ def create_responder_chain(llm):
         # ── 케이스 4: 일상 대화 → 온도 맞춰 가볍게 ────────────────────────────
         ("system", "current_focus=데이터 언급 없이 치킨 얘기에 자연스럽게 맞장구치며 가벼운 대화 유지"),
         ("human", "그냥 치킨 시켜먹었어요 ㅋㅋ 오랜만에"),
-        ("ai", "휴무일에 먹는 치킨은 정말 최고의 보상이죠! 오늘 같은 날엔 바삭한 치킨 한 조각이 그 어떤 위로보다 나을 수도 있어요.\\n\\n오랜만에 드시는 거면 제일 좋아하는 메뉴로 잘 고르셨나요?"),
+        ("ai", "치킨이요, 오랜만에 잘 하셨네요 ㅎㅎ 어디 시키셨어요?"),
         
         # ── 케이스 5: 종결 확인 - 요약 없이 의사만 묻기 ────────────────────────────
         ("system", "current_focus=[종결 확인] 요약하지 말고, 대화가 정리되었는지 아니면 더 할 말이 남았는지 정중히 물어볼 것"),
@@ -804,25 +816,6 @@ def get_graph():
     return g.compile(checkpointer=checkpointer)
 
 
-def _detect_shift_from_records(records) -> str | None:
-    """HR이 있는 슬롯의 시간대로 day/night를 자동 감지한다. 판단 불가 시 None 반환."""
-    day_count, night_count = 0, 0
-    for r in records or []:
-        hr = r.get("PPG_MeanHR", "N/A")
-        if hr in ("N/A", None, ""):
-            continue
-        try:
-            hour = int(str(r.get("time", "")).split(":")[0])
-        except Exception:
-            continue
-        if 8 <= hour < 20:
-            day_count += 1
-        else:
-            night_count += 1
-    if day_count == 0 and night_count == 0:
-        return None
-    return "day" if day_count >= night_count else "night"
-
 
 def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str = "day", prt: str = "", day: str = "", session_id: str = "", biosignal_consent: Optional[Literal["accepted", "declined", "unknown"]] = None, modal_submit: bool = False,):
     """
@@ -915,10 +908,6 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
             inputs["biosignal"] = records if records else {}
             records_count = len(records) if isinstance(records, list) else 0
 
-            detected_shift = _detect_shift_from_records(records)
-            if detected_shift:
-                inputs["profile"]["shift_type"] = detected_shift
-                print(f"[shift_type] 입력값={shift_type} → 데이터 기반 감지={detected_shift}")
         except Exception as e:
             inputs["biosignal"] = {}
             print(f"[Data Error] 생체 신호 로드 실패: {e}")
