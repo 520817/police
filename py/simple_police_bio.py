@@ -53,6 +53,7 @@ class AppState(TypedDict):
     biosignal_first_emit: bool
 
     biosignal: List[Dict[str, Any]]
+    session_start_msg_idx: int
 
 def initial_state(user_text: str, dept: str, user_rank: str, shift_type: str = "unknown", session_id: str = "", prt: str = "", day: str = "",) -> AppState:
     return {
@@ -433,6 +434,8 @@ class AnalysisResult(BaseModel):
 
 def build_full_history(state: AppState, max_msgs: int = 24):
     msgs = state.get("messages", [])
+    session_start = state.get("session_start_msg_idx", 0) or 0
+    msgs = msgs[session_start:]
     msgs = [m for m in msgs if not (isinstance(m, AIMessage) and getattr(m, "name", None) == "biosignal")]
     return msgs[-max_msgs:] if len(msgs) > max_msgs else msgs
 
@@ -842,7 +845,11 @@ def predict(user_text: str, dept: str = "", user_rank: str = "", shift_type: str
     current_state = current_state_snapshot.values if current_state_snapshot.values else {}
     if modal_submit:
         reset_point = len(current_state.get("analyses", []) or [])
-        graph.update_state(config, {"validation_reset_points": [reset_point]})
+        update = {"validation_reset_points": [reset_point]}
+        # 재접속(biosignal_consent 없이 modal_submit만 온 경우): 현재 메시지 수를 세션 시작점으로 저장
+        if biosignal_consent is None:
+            update["session_start_msg_idx"] = len(current_state.get("messages", []) or [])
+        graph.update_state(config, update)
         current_state = graph.get_state(config).values or current_state
 
 
