@@ -242,7 +242,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
                 biosignal_summary=f"데이터 부족 ({valid_record_count}개)",
                 opening_question="",
                 valid_record_count=valid_record_count,
-                plot_path=None,
+                plot_path=json.dumps(valid_signals, ensure_ascii=False),
             )
         except Exception as e:
             print(f"[DB Error] Biosignal log save failed: {e}")
@@ -296,7 +296,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             biosignal_summary=payload.get("biosignal_summary", ""),
             opening_question=payload.get("opening_question", ""),
             valid_record_count=valid_record_count,
-            plot_path=None,
+            plot_path=json.dumps(valid_signals, ensure_ascii=False),
         )
     except Exception as e:
         print(f"[DB Error] Biosignal log save failed: {e}")
