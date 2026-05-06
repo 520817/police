@@ -259,7 +259,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             "biosignal_first_emit": True,
             "biosignal_last": {
                 "biosignal_result": insufficient_msg,
-                "biosignal_summary": f"[시스템 상태] 유효 측정 슬롯이 {valid_record_count}개로 부족하여 분석 불가. 사용자가 분석이 왜 안 되냐고 직접 물어볼 경우에만 이 사실을 간단히 설명하고, 그 외에는 생체신호 언급 금지.",
+                "biosignal_summary": f"[시스템 상태] 유효 측정 슬롯이 {valid_record_count}개로 부족하여 분석 불가 (최소 4개 필요). 사용자가 분석이 왜 안 되냐고 직접 물어볼 경우에만 이 사실을 간단히 설명하고, 그 외에는 생체신호 언급 금지.",
                 "bio_html": bio_html,
             },
             "messages": [
