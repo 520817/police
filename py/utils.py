@@ -78,6 +78,7 @@ def _parse_dt_series(day: str, time_series: pd.Series) -> pd.Series:
 def make_biosignal_html(
     valid_signals,
     shift_type: str = "day",
+    start_hour: int = None,
 ) -> str | None:
     slot_map = {}
 
@@ -113,7 +114,9 @@ def make_biosignal_html(
     is_duty = shift_type == "duty"
     slot_count = 24 if is_duty else 12
 
-    if slot_map:
+    if start_hour is not None:
+        base_h = (start_hour - slot_count + 1) % 24
+    elif slot_map:
         base_h = int(sorted(slot_map.keys())[0])
     else:
         base_h = 22 if shift_type == "night" else 9
