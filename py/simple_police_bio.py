@@ -239,7 +239,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             save_biosignal_log(
                 session_id=state["meta"]["session_id"],
                 biosignal_result=insufficient_msg,
-                biosignal_summary="",
+                biosignal_summary=f"데이터 부족 ({valid_record_count}개)",,
                 opening_question="",
                 valid_record_count=valid_record_count,
                 plot_path=None,
