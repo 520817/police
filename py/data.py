@@ -90,7 +90,10 @@ def get_biosignal_records(
         except (TypeError, ValueError):
             return "N/A"
 
-    records = []
+    # 시간대별로 자동(1) 우선, 없으면 맥파(3) 사용
+    # slot_key(HH) → {"auto": record, "manual": record}
+    slot_candidates: dict = {}
+
     for item in items:
         # start_time 파싱
         try:
@@ -121,7 +124,24 @@ def get_biosignal_records(
             "PPG_LFn":    _round(fv.get("PPG_LFn")),
             "PPG_HFn":    _round(fv.get("PPG_HFn")),
         }
-        records.append(record)
+
+        slot_key = item_dt.strftime("%H")
+        collection_type = item.get("collection_type")
+        bucket = slot_candidates.setdefault(slot_key, {})
+
+        if collection_type == 1:
+            bucket["auto"] = record
+        elif collection_type == 3:
+            if "manual" not in bucket:
+                bucket["manual"] = record
+
+    # 자동 우선, 없으면 맥파
+    records = []
+    for slot_key in sorted(slot_candidates.keys()):
+        bucket = slot_candidates[slot_key]
+        record = bucket.get("auto") or bucket.get("manual")
+        if record:
+            records.append(record)
 
     # ── 4. 시간순 정렬 ──
     records.sort(key=lambda x: x["time"])
