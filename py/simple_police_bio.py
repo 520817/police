@@ -208,14 +208,20 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
 
     dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
 
+    signals_to_send = remove_ppg_prefix(valid_signals)
+    signals_json = json.dumps(signals_to_send, ensure_ascii=False)
+
     print("="*50)
     print("[DEBUG] valid_record_count:", valid_record_count)
     print("[DEBUG] is_data_sufficient:", is_data_sufficient)
+    print("[DEBUG] AI에게 전달되는 signals_json:")
+    print(signals_json)
     print("="*50)
 
     # plot은 동의하면 무조건: HR 필터 전 전체 슬롯 기준
     all_slots_list = signals_all_slots if isinstance(signals_all_slots, list) else []
-    bio_html = make_biosignal_html(valid_signals=all_slots_list, shift_type=shift_type)
+    current_hour = datetime.now(ZoneInfo("Asia/Seoul")).hour
+    bio_html = make_biosignal_html(valid_signals=all_slots_list, shift_type=shift_type, start_hour=current_hour)
 
     # 4개 미만이면 LLM 호출 없이 바로 처리 (declined와 동일하게 생체신호 미사용)
     if not is_data_sufficient:
@@ -257,12 +263,6 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
         }
 
     # 4개 이상: LLM 분석
-    signals_to_send = remove_ppg_prefix(valid_signals)
-    signals_json = json.dumps(signals_to_send, ensure_ascii=False)
-
-    print("[DEBUG] AI에게 전달되는 signals_json:")
-    print(signals_json)
-
     result: BiosignalAnalysis = biosignal_analyzer_chain.invoke({
         "signals_json": signals_json,
         "is_data_sufficient": is_data_sufficient,
