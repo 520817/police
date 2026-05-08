@@ -64,6 +64,7 @@ export default function App() {
   const [userRank, setUserRank] = useState("");
   const [shiftType, setShiftType] = useState("");
   const [starting, setStarting] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   // "unknown" | "accepted" | "declined" | "ended"
   const [consentState, setConsentState] = useState("unknown");
@@ -163,10 +164,11 @@ export default function App() {
       alert("전화번호를 먼저 입력해 주세요.");
       return;
     }
-    if (!dept.trim() || !userRank.trim()) {
-      alert("부서와 계급을 입력해 주세요.");
+    if (!dept.trim() || !userRank.trim() || !shiftType) {
+      setSubmitAttempted(true);
       return;
     }
+    setSubmitAttempted(false);
     if (starting) return;
 
     setPrecheckPhase("pre");
@@ -680,7 +682,7 @@ export default function App() {
                 setDept(v);
                 localStorage.setItem("dept", v);
               }}
-              className="message-input dept-input"
+              className={`message-input dept-input${submitAttempted && !dept.trim() ? " input--error" : ""}`}
               disabled={pendingEnd}
             />
             <input
@@ -691,7 +693,7 @@ export default function App() {
                 setUserRank(v);
                 localStorage.setItem("user_rank", v);
               }}
-              className="message-input rank-input"
+              className={`message-input rank-input${submitAttempted && !userRank.trim() ? " input--error" : ""}`}
               disabled={pendingEnd}
             />
             <select
@@ -699,7 +701,7 @@ export default function App() {
               onChange={(e) => {
                 setShiftType(e.target.value);
               }}
-              className="message-input shift-input"
+              className={`message-input shift-input${submitAttempted && !shiftType ? " input--error" : ""}`}
               disabled={pendingEnd}
               aria-label="근무타입"
               title="근무타입"
@@ -714,10 +716,17 @@ export default function App() {
             <button
               className="send-button start-button"
               onClick={handleStart}
-              disabled={starting || !dept || !userRank || !userId || !shiftType}
+              disabled={starting}
             >
               대화 시작
             </button>
+          </div>
+        )}
+        {!started && submitAttempted && (!dept.trim() || !userRank.trim() || !shiftType) && (
+          <div className="profile-error">
+            {[!dept.trim() && "부서", !userRank.trim() && "계급", !shiftType && "근무 유형"]
+              .filter(Boolean)
+              .join(", ")}을 입력해 주세요.
           </div>
         )}
 
