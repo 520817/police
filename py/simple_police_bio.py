@@ -164,14 +164,16 @@ biosignal_summary에는 해당 시간대를 신뢰도 낮은 구간으로 명시
     - [데이터 팩트시트] 작성 규칙:
      1) 모든 시간대의 데이터를 나열하지 마라.
      2) Stress가 1인 '긴장 구간'과, 데이터가 불안정한 '오류 구간'만 명시하라.
-     3) 형식:
+     3) 시간대 명시 시 새벽(00~05시), 오전(06~11시), 오후(12~17시), 저녁·밤(18~23시) 구분을 함께 표기하라.
+     4) 형식:
         [데이터 팩트시트]
-        - 긴장: 시간대(Stress, HR, SDNN)
+        - 긴장: 시간대(새벽/오전/오후/저녁, Stress, HR, SDNN)
         - 오류: 시간대
         - 기타: 나머지 시간은 안정적임.
 
 3. opening_question
     - 신뢰도가 높은 구간 중 가장 뚜렷한 변화가 있었던 시간대를 소재로 질문을 만든다.
+    - 시간대를 언급할 때 새벽(00~05시), 오전(06~11시), 오후(12~17시), 저녁·밤(18~23시)으로 구분하여 표현하라.
     - 단순히 사실을 묻는 것이 아니라, "신체 반응이 나타났는데, 마음(상황)은 어땠는지"를 연결하여 1~2문장으로 만든다.
     - 예시: "20시 무렵에 신체 긴장 신호가 꽤 뚜렷하게 나타났던데, 혹시 그때 마음이 쓰였던 상황이나 특별한 일이 있으셨나요?"
     - sufficient=False인 경우 빈 문자열("")을 출력한다.
@@ -596,7 +598,10 @@ def analyzer_node(state: AppState, analyzer_chain):
     new_logs = [] if last_log_same else [analysis_line]
 
     if not last_log_same:
+        print(f"\n{'='*50}")
+        print(f"[Analyzer] user_text: {user_text}")
         print(analysis_line)
+        print(f"{'='*50}")
 
     return {
         "analyses": new_analyses,
@@ -648,7 +653,7 @@ emotion: {emotion}
 [응답 형식 — 2문단]
 1문단: 사용자의 말 뒤에 담긴 감정과 맥락을 읽고 공감한다. 절대 사용자의 말을 그대로 반복(앵무새)하지 마라.
        가벼운 일상 대화에서는 1문단으로 끝내도 된다.
-2문단: 반드시 열린 질문 1개로 끝낸다.
+2문단: 반드시 열린 질문 1개로 끝낸다. 질문이 2개 이상이면 안 된다.
        - [2단계] 지시가 명시적으로 내려온 경우에만 마무리 인사 허용.
        - 이미 확인된 사실을 다시 묻지 않는다.
 
@@ -756,6 +761,8 @@ def responder_node(state: AppState, responder_chain) -> AppState:
     reply_text = linebreak_by_sentence(clean_output)
     reply = reply_text.strip()
 
+    print(f"[Responder] ai_text: {reply}\n{'='*50}\n")
+    
     try:
         save_chat_message(
             session_id=state["meta"]["session_id"],
