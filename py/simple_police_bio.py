@@ -497,8 +497,7 @@ def create_analyzer_chain(llm):
             ("human", "[현재 턴: 12턴] [현재 입력] 응 이제 마무리 할래. 고마워."),
             ("ai", """{{"thought": "[관찰] 명시적 종료 동의 표현. [기확인 사항] 1단계 확인 질문 및 사용자 수락 확인. [해석] [부서·계급·근무형태 조합 파악] dept=형사(수사 압박·책임) + user_rank=경감(팀 관리) + shift_type=night. 생체 데이터 활용 ✅: 통합 마무리 조건 충족. 프로필 활용 ✅: 확인된 직무 맥락을 서사에 녹여 마무리. [다음 응답 방향] [2단계] dept=형사/user_rank=경감/shift_type=night 맥락에서 오늘 나눈 사건, 감정 흐름, 생체 데이터를 하나의 서사로 엮어 따뜻하게 인사할 것.", "situation": "오늘의 대화와 감정 흐름을 최종 요약하고 작별하는 시점임.", "emotion": {{"main": "수용", "sub": "안도", "valence": "positive"}}}}"""),
             
-            ("system", "=== 위는 예시다. 아래부터 실제 대화가 시작된다. ==="),
-            ("system", "실제 사용자 프로필: dept={dept} / user_rank={user_rank} / shift_type={shift_type}"),
+            ("system", "=== 위는 예시다. 아래부터 실제 대화가 시작된다. 실제 사용자 프로필: dept={dept} / user_rank={user_rank} / shift_type={shift_type} ==="),
 
             MessagesPlaceholder("full_history", optional=True),
             ("system", "생체요약:\n{biosignal_summary}"),
@@ -704,8 +703,8 @@ def create_responder_chain(llm):
         ("human", "응 이제 마무리 할래. 고마워."),
         ("ai", "네, 경감님. 오늘 수사 압박에 처음엔 정말 지치셨는데, 그래도 이야기 나누면서 조금 가벼워지셨다니 다행입니다.\\n\\n오늘 몸이 보냈던 긴장 신호들도 결국 그 무게를 버텨내느라 애쓴 흔적이었네요. 오늘 하루도 정말 고생 많으셨습니다.\\n\\n이제 짐 다 내려놓으시고, 편안한 밤 되십쇼!"),
 
-        ("system", "=== 위 예시는 응답 구조·톤 참고용이다. 예시에 나온 특정 시간·근무형태는 모두 가상이며 실제 응답에서 그대로 복사하지 말 것. 실제 시간·데이터는 반드시 아래 full_history에서만 참조하라. ==="),
-
+        ("system", "=== 위는 예시다. 아래부터 실제 대화가 시작된다. 실제 사용자 프로필: dept={dept} / user_rank={user_rank} / shift_type={shift_type} ==="),
+        
         MessagesPlaceholder("full_history", optional=True),
         ("system",
          "[재확인] analyzer_thought: {analyzer_thought} 위 지침 중 [다음 응답 방향]에 적힌 구체적인 전략을 최우선으로 실행하라."),])
