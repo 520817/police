@@ -62,7 +62,7 @@ export default function App() {
 
   const [dept, setDept] = useState("");
   const [userRank, setUserRank] = useState("");
-  const [shiftType, setShiftType] = useState("day");
+  const [shiftType, setShiftType] = useState("");
   const [starting, setStarting] = useState(false);
 
   // "unknown" | "accepted" | "declined" | "ended"
@@ -110,11 +110,6 @@ export default function App() {
     const storedUserRank = localStorage.getItem("user_rank");
     if (storedUserRank) {
       setUserRank(storedUserRank);
-    }
-
-    const storedShiftType = localStorage.getItem("shift_type");
-    if (storedShiftType) {
-      setShiftType(storedShiftType === "holiday" ? "off" : storedShiftType);
     }
 
     const storedSessionId = localStorage.getItem("session_id");
@@ -702,15 +697,14 @@ export default function App() {
             <select
               value={shiftType}
               onChange={(e) => {
-                const v = e.target.value;
-                setShiftType(v);
-                localStorage.setItem("shift_type", v);
+                setShiftType(e.target.value);
               }}
               className="message-input shift-input"
               disabled={pendingEnd}
               aria-label="근무타입"
               title="근무타입"
             >
+              <option value="" disabled hidden></option>
               <option value="day">주간</option>
               <option value="night">야간</option>
               <option value="off">비번</option>
@@ -720,7 +714,7 @@ export default function App() {
             <button
               className="send-button start-button"
               onClick={handleStart}
-              disabled={starting || !dept || !userRank || !userId}
+              disabled={starting || !dept || !userRank || !userId || !shiftType}
             >
               대화 시작
             </button>
