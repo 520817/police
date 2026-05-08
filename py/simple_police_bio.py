@@ -498,6 +498,7 @@ def create_analyzer_chain(llm):
             ("ai", """{{"thought": "[관찰] 명시적 종료 동의 표현. [기확인 사항] 1단계 확인 질문 및 사용자 수락 확인. [해석] [부서·계급·근무형태 조합 파악] dept=형사(수사 압박·책임) + user_rank=경감(팀 관리) + shift_type=night. 생체 데이터 활용 ✅: 통합 마무리 조건 충족. 프로필 활용 ✅: 확인된 직무 맥락을 서사에 녹여 마무리. [다음 응답 방향] [2단계] dept=형사/user_rank=경감/shift_type=night 맥락에서 오늘 나눈 사건, 감정 흐름, 생체 데이터를 하나의 서사로 엮어 따뜻하게 인사할 것.", "situation": "오늘의 대화와 감정 흐름을 최종 요약하고 작별하는 시점임.", "emotion": {{"main": "수용", "sub": "안도", "valence": "positive"}}}}"""),
             
             ("system", "=== 위는 예시다. 아래부터 실제 대화가 시작된다. ==="),
+            ("system", "실제 사용자 프로필: dept={dept} / user_rank={user_rank} / shift_type={shift_type}"),
 
             MessagesPlaceholder("full_history", optional=True),
             ("system", "생체요약:\n{biosignal_summary}"),
