@@ -542,12 +542,8 @@ export default function App() {
           setPrecheckData(payload);
           setShowPrecheck(false);
 
-          let actualSessionId = sessionId;
-
-          if (precheckPhase === "pre") {
-            // 1일 1세션: HHMMSS 없이 KST day 기준 session_id 사용
-            actualSessionId = sessionId;
-          }
+          const day = getKstDay();
+          const actualSessionId = sessionId || (userId ? `${userId}_${day}` : null);
 
           try {
             console.log(`${precheckPhase} 전송 시작 - ID:`, actualSessionId);
