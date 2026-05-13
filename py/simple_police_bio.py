@@ -225,7 +225,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
                 valid_signals.append(record)
 
     valid_record_count = len(valid_signals)
-    is_data_sufficient = valid_record_count >= 4
+    is_data_sufficient = valid_record_count >= 3
 
     dept, user_rank, shift_type = state["profile"]["dept"], state["profile"]["user_rank"], state["profile"]["shift_type"]
 
@@ -244,7 +244,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
     current_hour = datetime.now(ZoneInfo("Asia/Seoul")).hour
     bio_html = make_biosignal_html(valid_signals=all_slots_list, shift_type=shift_type, start_hour=current_hour)
 
-    # 4개 미만이면 LLM 호출 없이 바로 처리 (declined와 동일하게 생체신호 미사용)
+    # 3개 미만이면 LLM 호출 없이 바로 처리 (declined와 동일하게 생체신호 미사용)
     if not is_data_sufficient:
         insufficient_msg = "경찰관님, 안녕하세요. 이번 회차의 생체 신호를 확인했으나, 측정된 데이터 기록이 부족하여 의미 있는 시간대별 분석을 제공해 드리기 어렵습니다. 데이터가 충분히 누적되면 다음 분석 시에 다시 한 번 자세히 살펴보도록 하겠습니다."
         opening_q = DEFAULT_OPENING_Q
@@ -273,7 +273,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             "biosignal_first_emit": True,
             "biosignal_last": {
                 "biosignal_result": insufficient_msg,
-                "biosignal_summary": f"[시스템 상태] 유효 측정 슬롯이 {valid_record_count}개로 부족하여 분석 불가 (최소 4개 필요). 사용자가 분석이 왜 안 되냐고 직접 물어볼 경우에만 이 사실을 간단히 설명하고, 그 외에는 생체신호 언급 금지.",
+                "biosignal_summary": f"[시스템 상태] 유효 측정 슬롯이 {valid_record_count}개로 부족하여 분석 불가 (최소 3개 필요). 사용자가 분석이 왜 안 되냐고 직접 물어볼 경우에만 이 사실을 간단히 설명하고, 그 외에는 생체신호 언급 금지.",
                 "bio_html": bio_html,
             },
             "messages": [
@@ -283,7 +283,7 @@ def biosignal_analyzer_node(state: AppState, biosignal_analyzer_chain):
             "logs": ["biosignal_insufficient"],
         }
 
-    # 4개 이상: LLM 분석
+    # 3개 이상: LLM 분석
     result: BiosignalAnalysis = biosignal_analyzer_chain.invoke({
         "signals_json": signals_json,
         "is_data_sufficient": is_data_sufficient,
