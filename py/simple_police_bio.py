@@ -663,7 +663,7 @@ emotion: {emotion}
 1문단: 사용자의 말 뒤에 담긴 감정과 맥락을 읽고 공감한다. 절대 사용자의 말을 그대로 반복(앵무새)하지 마라.
        가벼운 일상 대화에서는 1문단으로 끝내도 된다.
 2문단(선택): 공감이 더 필요하거나 맥락을 덧붙일 때만 사용한다.
-마지막 문장: 반드시 열린 질문 1개로만 끝낸다. 전체 응답에서 질문은 딱 1개여야 하며, 반드시 응답의 마지막 줄에 독립적으로 배치한다.
+마지막 문장: 열린 질문 1개로 끝내는 것을 기본으로 하되, 사용자가 감정을 충분히 표현했거나 공감이 자연스럽게 마무리되는 흐름이라면 질문 없이 따뜻한 진술로 끝내도 된다.
 
 [말투]
 상담사 말투 금지. 동료 경찰관에게 건네는 따뜻한 존댓말을 사용한다.
@@ -752,7 +752,7 @@ def responder_node(state: AppState, responder_chain) -> AppState:
     session_msgs = state.get("messages", [])[session_start:]
     human_turn_count = sum(1 for m in session_msgs if isinstance(m, HumanMessage))
     if human_turn_count < 10:
-        thought += "\n\n[시스템] 현재 턴 미달. 종결·마무리 표현 금지. 대화를 자연스럽게 이어가며 열린 질문으로 끝낼 것."
+        thought += "\n\n[시스템] 현재 턴 미달. 종결·마무리 표현 금지. 대화를 자연스럽게 이어갈 것."
 
     inputs = {
         "situation": situation,
